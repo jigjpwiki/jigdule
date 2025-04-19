@@ -1,5 +1,7 @@
-import fs from 'fs/promises';
-import fetch from 'node-fetch';
+'use strict';
+
+const fs = require('fs').promises;
+const fetch = require('node-fetch');
 
 const YT_API_KEY = process.env.YT_API_KEY;
 const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
@@ -8,24 +10,13 @@ const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 async function getTwitchToken() {
   const res = await fetch(
     `https://id.twitch.tv/oauth2/token` +
-      `?client_id=${TWITCH_CLIENT_ID}` +
-      `&client_secret=${TWITCH_CLIENT_SECRET}` +
-      `&grant_type=client_credentials`,
+    `?client_id=${TWITCH_CLIENT_ID}` +
+    `&client_secret=${TWITCH_CLIENT_SECRET}` +
+    `&grant_type=client_credentials`,
     { method: 'POST' }
   );
   const json = await res.json();
   return json.access_token;
-}
-
-async function fetchTwitchUserId(login, token) {
-  const res = await fetch(`https://api.twitch.tv/helix/users?login=${login}`, {
-    headers: {
-      'Client-ID': TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
-    }
-  });
-  const { data } = await res.json();
-  return data[0]?.id || null;
 }
 
 async function fetchTwitchLive(login, token) {
@@ -36,7 +27,7 @@ async function fetchTwitchLive(login, token) {
     }
   });
   const { data } = await res.json();
-  if (!data.length) return null;
+  if (!data || data.length === 0) return null;
   const s = data[0];
   return {
     title: s.title,
@@ -46,17 +37,23 @@ async function fetchTwitchLive(login, token) {
 }
 
 async function fetchTwitchSchedule(login, token) {
-  const userId = await fetchTwitchUserId(login, token);
-  if (!userId) return [];
-  const res = await fetch(
-    `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
-    {
-      headers: {
-        'Client-ID': TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
+  // ユーザーID取得
+  const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${login}`, {
+    headers: {
+      'Client-ID': TWITCH_CLIENT_ID,
+      Authorization: `Bearer ${token}`
     }
-  );
+  });
+  const userJson = await userRes.json();
+  const userId = userJson.data?.[0]?.id;
+  if (!userId) return [];
+  // スケジュール取得
+  const res = await fetch(`https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`, {
+    headers: {
+      'Client-ID': TWITCH_CLIENT_ID,
+      Authorization: `Bearer ${token}`
+    }
+  });
   const json = await res.json();
   const segs = json.data?.segments || [];
   return segs.map(s => ({
@@ -83,13 +80,12 @@ async function fetchYouTube(channelId, eventType, maxResults = 5) {
 }
 
 function generateHTML(streamers) {
-  const listItems = streamers
-    .map(s => {
-      const ytLive = s.youtube.live[0];
-      const ytUp = s.youtube.upcoming;
-      const twLive = s.twitch.live;
-      const twSch = s.twitch.schedule;
-      return `
+  const listItems = streamers.map(s => {
+    const ytLive = s.youtube.live[0];
+    const ytUp = s.youtube.upcoming;
+    const twLive = s.twitch.live;
+    const twSch = s.twitch.schedule;
+    return `
 <li class="streamer">
   <h2>${s.name}</h2>
   <div class="platform">
@@ -97,49 +93,36 @@ function generateHTML(streamers) {
     <p>${ytLive
       ? `LIVE: <a href="${ytLive.url}" target="_blank">${ytLive.title}</a> (${ytLive.time})`
       : '現在配信中なし'}</p>
-    ${
-      ytUp.length
-        ? '<ul>' +
-          ytUp
-            .map(
-              u =>
-                `<li>予定: <a href="${u.url}" target="_blank">${u.title}</a> (${u.time})</li>`
-            )
-            .join('') +
-          '</ul>'
-        : ''
-    }
+    ${ytUp.length
+      ? '<ul>' +
+        ytUp.map(u =>
+          `<li>予定: <a href="${u.url}" target="_blank">${u.title}</a> (${u.time})</li>`
+        ).join('') +
+        '</ul>'
+      : ''}
   </div>
   <div class="platform">
     <h3>Twitch</h3>
     <p>${twLive
       ? `LIVE: <a href="${twLive.url}" target="_blank">${twLive.title}</a> (${twLive.startTime})`
       : '現在配信中なし'}</p>
-    ${
-      twSch.length
-        ? '<ul>' +
-          twSch
-            .map(
-              s =>
-                `<li>予定: <a href="${s.url || `https://twitch.tv/${s.user}`}">${
-                  s.title
-                }</a> (${s.startTime})</li>`
-            )
-            .join('') +
-          '</ul>'
-        : ''
-    }
+    ${twSch.length
+      ? '<ul>' +
+        twSch.map(u =>
+          `<li>予定: <a href="${u.url || `https://twitch.tv/${s.twitchUserLogin}`}" target="_blank">${u.title}</a> (${u.startTime})</li>`
+        ).join('') +
+        '</ul>'
+      : ''}
   </div>
 </li>`;
-    })
-    .join('');
+  }).join('');
 
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="assets/style.css">
-  <title>配信状況一覧</title>
+  <title>ライブ & 近日配信予定</title>
 </head>
 <body>
   <h1>ライブ & 近日配信予定</h1>
@@ -151,20 +134,26 @@ function generateHTML(streamers) {
 }
 
 (async () => {
-  const token = await getTwitchToken();
-  const list = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
-  const results = [];
-  for (const s of list) {
-    const ytLive = await fetchYouTube(s.youtubeChannelId, 'live', 1);
-    const ytUp = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
-    const twLive = await fetchTwitchLive(s.twitchUserLogin, token);
-    const twSch = await fetchTwitchSchedule(s.twitchUserLogin, token);
-    results.push({
-      name: s.name,
-      youtube: { live: ytLive, upcoming: ytUp },
-      twitch: { live: twLive, schedule: twSch }
-    });
+  try {
+    const token = await getTwitchToken();
+    const listJson = await fs.readFile('data/streamers.json', 'utf8');
+    const list = JSON.parse(listJson);
+    const results = [];
+    for (const s of list) {
+      const ytLive = await fetchYouTube(s.youtubeChannelId, 'live', 1);
+      const ytUp = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
+      const twLive = await fetchTwitchLive(s.twitchUserLogin, token);
+      const twSch = await fetchTwitchSchedule(s.twitchUserLogin, token);
+      results.push({
+        name: s.name,
+        youtube: { live: ytLive, upcoming: ytUp },
+        twitch: { live: twLive, schedule: twSch }
+      });
+    }
+    const html = generateHTML(results);
+    await fs.writeFile('docs/index.html', html, 'utf8');
+  } catch (err) {
+    console.error('Error in fetch_streams.js:', err);
+    process.exit(1);
   }
-  const html = generateHTML(results);
-  await fs.writeFile('docs/index.html', html, 'utf8');
 })();
