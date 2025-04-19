@@ -1,206 +1,178 @@
 'use strict';
- 
- const fs = require('fs').promises;
- const fetch = require('node-fetch');
- 
- const YT_API_KEY            = process.env.YT_API_KEY;
- const TWITCH_CLIENT_ID      = process.env.TWITCH_CLIENT_ID;
- const TWITCH_CLIENT_SECRET  = process.env.TWITCH_CLIENT_SECRET;
- 
- async function getTwitchToken() {
-   const res = await fetch(
-     `https://id.twitch.tv/oauth2/token?` +
-     `client_id=${TWITCH_CLIENT_ID}` +
-     `&client_secret=${TWITCH_CLIENT_SECRET}` +
-     `&grant_type=client_credentials`,
-     { method: 'POST' }
-   );
-   const json = await res.json();
-   return json.access_token;
- }
- 
- async function fetchTwitchLive(login, token) {
-   const res = await fetch(
-     `https://api.twitch.tv/helix/streams?user_login=${login}`,
-     {
-       headers: {
-         'Client-ID': TWITCH_CLIENT_ID,
-         Authorization: `Bearer ${token}`
-       }
-     }
-   );
-   const { data } = await res.json();
-   if (!data || data.length === 0) return null;
-   const s = data[0];
-   return {
-     title:     s.title,
-     startTime: s.started_at,
-     url:       `https://twitch.tv/${login}`
-   };
- }
- 
- async function fetchTwitchSchedule(login, token) {
-   // ユーザーIDを取得
-   const userRes = await fetch(
-     `https://api.twitch.tv/helix/users?login=${login}`,
-     {
-       headers: {
-         'Client-ID': TWITCH_CLIENT_ID,
-         Authorization: `Bearer ${token}`
-       }
-     }
-   );
-   const userJson = await userRes.json();
-   const userId = userJson.data?.[0]?.id;
-   if (!userId) return [];
-   // スケジュール取得
-   const res = await fetch(
-     `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
-     {
-       headers: {
-         'Client-ID': TWITCH_CLIENT_ID,
-         Authorization: `Bearer ${token}`
-       }
-     }
-   );
-   const json = await res.json();
-   return (json.data?.segments || []).map(s => ({
-     title:     s.title,
-     startTime: s.start_time
-   }));
- }
- 
- async function fetchYouTube(channelId, eventType, maxResults = 5) {
-   const url =
-     `https://www.googleapis.com/youtube/v3/search?` +
-     `key=${YT_API_KEY}` +
-     `&channelId=${channelId}` +
-     `&part=snippet&type=video` +
-     `&eventType=${eventType}` +
-     `&maxResults=${maxResults}`;
-   const res = await fetch(url);
-   const json = await res.json();
-   return (json.items || []).map(item => ({
-     title: item.snippet.title,
-     time:  item.snippet.publishedAt,
-     url:   `https://youtu.be/${item.id.videoId}`
-   }));
- }
- 
- /**
-  * ISO8601 の UTC 時刻文字列を受け取り、
-  * 日本時間の「YYYY/MM/DD HH:mm:ss」形式に整形して返す
-  */
- function formatJST(utcString) {
-   const d = new Date(utcString);
-   return d.toLocaleString('ja-JP', {
-     timeZone: 'Asia/Tokyo',
-     year:   'numeric',
-     month:  '2-digit',
-     day:    '2-digit',
-     hour:   '2-digit',
-     minute: '2-digit',
-     second: '2-digit',
-     hour12: false
-   });
- }
- 
- 
- function generateHTML(streamers) {
-  const items = streamers.map(s => {
-    const ytLive = s.youtube.live[0];
-    const ytUp   = s.youtube.upcoming;
-    const twLive = s.twitch.live;
-    const twSch  = s.twitch.schedule;
-    return `
-<li class="streamer">
-  <h2>${s.name}</h2>
-  <div class="platform">
-    <h3>YouTube</h3>
-    <p>${
-      ytLive
-        ? `LIVE: <a href="${ytLive.url}" target="_blank">${ytLive.title}</a> (${formatJST(ytLive.time)})`
-        : '現在配信中なし'
-    }</p>
-    ${
-      ytUp.length
-        ? '<ul>' +
-            ytUp
-              .map(u =>
-                `<li>予定: <a href="${u.url}" target="_blank">${u.title}</a> (${formatJST(u.time)})</li>`
-              )
-              .join('') +
-            '</ul>'
-        : ''
+
+const fs    = require('fs').promises;
+const fetch = require('node-fetch');
+
+const YT_API_KEY           = process.env.YT_API_KEY;
+const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
+
+/** JST で整形 */
+function formatJST(utcString) {
+  const d = new Date(utcString);
+  return d.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    hour12: false,
+    year:   'numeric',
+    month:  '2-digit',
+    day:    '2-digit',
+    hour:   '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+/** Twitch Token 取得 */
+async function getTwitchToken() {
+  const res = await fetch(
+    `https://id.twitch.tv/oauth2/token?` +
+    `client_id=${TWITCH_CLIENT_ID}` +
+    `&client_secret=${TWITCH_CLIENT_SECRET}` +
+    `&grant_type=client_credentials`,
+    { method: 'POST' }
+  );
+  return (await res.json()).access_token;
+}
+
+/** Twitch のライブ */
+async function fetchTwitchLive(login, token) {
+  const res = await fetch(
+    `https://api.twitch.tv/helix/streams?user_login=${login}`,
+    { headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
     }
-  </div>
-  <div class="platform">
-    <h3>Twitch</h3>
-    <p>${
-      twLive
-        ? `LIVE: <a href="${twLive.url}" target="_blank">${twLive.title}</a> (${formatJST(twLive.startTime)})`
-        : '現在配信中なし'
-    }</p>
-    ${
-      twSch.length
-        ? '<ul>' +
-            twSch
-              .map(u =>
-                `<li>予定: <a href="${u.url ||
-                  `https://twitch.tv/${s.twitchUserLogin}`}" target="_blank">${u.title}</a> (${formatJST(
-                  u.startTime
-                )})</li>`
-              )
-              .join('') +
-            '</ul>'
-        : ''
+  );
+  const { data } = await res.json();
+  if (!data || !data[0]) return null;
+  const s = data[0];
+  return {
+    platform:   'Twitch LIVE',
+    streamer:   login,
+    title:      s.title,
+    url:        `https://twitch.tv/${login}`,
+    time:       s.started_at
+  };
+}
+
+/** Twitch のスケジュール */
+async function fetchTwitchSchedule(login, token) {
+  // ユーザーID
+  const u = await fetch(
+    `https://api.twitch.tv/helix/users?login=${login}`,
+    { headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
     }
-  </div>
-</li>`;
-  }).join('');
+  ).then(r => r.json());
+  const id = u.data?.[0]?.id;
+  if (!id) return [];
+  // 予定
+  const res = await fetch(
+    `https://api.twitch.tv/helix/schedule?broadcaster_id=${id}`,
+    { headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+  const segs = (await res.json()).data?.segments || [];
+  return segs.map(s => ({
+    platform: 'Twitch 予定',
+    streamer: login,
+    title:    s.title,
+    url:      '',            // URL は無いため省略可
+    time:     s.start_time
+  }));
+}
+
+/** YouTube の現在／予定／過去動画 */
+async function fetchYouTube(channelId, params) {
+  const url =
+    `https://www.googleapis.com/youtube/v3/search?` +
+    `key=${YT_API_KEY}` +
+    `&channelId=${channelId}` +
+    `&part=snippet&type=video&order=date&maxResults=10&${params}`;
+  const items = (await (await fetch(url)).json()).items || [];
+  return items.map(item => ({
+    platform: params.includes('eventType')
+      ? `YouTube ${params.includes('live') ? 'LIVE' : '予定'}`
+      : 'YouTube 投稿',
+    streamer: channelId,
+    title:    item.snippet.title,
+    url:      `https://youtu.be/${item.id.videoId}`,
+    time:     item.snippet.publishedAt
+  }));
+}
+
+/** 当日投稿動画のみ取得するヘルパー */
+function todayISO() {
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d.toISOString();
+}
+
+function generateHTML(events) {
+  // テーブルのヘッダー＋行を生成
+  const rows = events.map(e => `
+<tr>
+  <td>${formatJST(e.time)}</td>
+  <td>${e.platform}</td>
+  <td>${e.streamer}</td>
+  <td><a href="${e.url}" target="_blank">${e.title}</a></td>
+</tr>`).join('');
 
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="assets/style.css">
-  <title>ライブ & 近日配信予定</title>
+  <title>当日のライブ＆動画タイムテーブル</title>
 </head>
 <body>
-  <h1>ライブ & 近日配信予定</h1>
-  <ul class="streamers">
-    ${items}
-  </ul>
+  <h1>当日のライブ & 動画タイムテーブル</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>時間 (JST)</th><th>種別</th><th>配信者/チャンネル</th><th>タイトル</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
 </body>
 </html>`;
 }
 
- 
- (async () => {
-   try {
-     const token = await getTwitchToken();
-     const listTxt = await fs.readFile('data/streamers.json', 'utf8');
-     const list    = JSON.parse(listTxt);
-     const results = [];
-     for (const s of list) {
-       const ytLive = await fetchYouTube(s.youtubeChannelId, 'live', 1);
-       const ytUp   = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
-       const twLive = await fetchTwitchLive(s.twitchUserLogin, token);
-       const twSch  = await fetchTwitchSchedule(s.twitchUserLogin, token);
-       results.push({
-         name:    s.name,
-         youtube: { live: ytLive, upcoming: ytUp },
-         twitch:  { live: twLive, schedule: twSch }
-       });
-     }
-     const html = generateHTML(results);
-     console.log(formatJST("2025-04-19T12:00:01Z"));
-     console.log(`▶ 取得した配信者数: ${results.length}`);
-     results.forEach(s => console.log(`  - ${s.name}: YouTube live ${s.youtube.live.length}, Twitch live ${s.twitch.live?1:0}`));
- 
-     await fs.writeFile('docs/index.html', html, 'utf8');
-   } catch (err) {
-     console.error('Error in fetch_streams.js:', err);
-     process.exit(1);
-   }
- })();
+(async () => {
+  const token = await getTwitchToken();
+  const list  = JSON.parse(await fs.readFile('data/streamers.json','utf8'));
+  const evs   = [];
+
+  for (const s of list) {
+    // Twitch live
+    const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
+    if (tLive) evs.push(tLive);
+    // Twitch 予定
+    (await fetchTwitchSchedule(s.twitchUserLogin, token))
+      .forEach(e => evs.push(e));
+    // YouTube LIVE 現状
+    (await fetchYouTube(s.youtubeChannelId, 'eventType=live'))
+      .forEach(e => evs.push(e));
+    // YouTube 予定
+    (await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming'))
+      .forEach(e => evs.push(e));
+    // YouTube 当日投稿動画
+    (await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`))
+      .forEach(e => evs.push(e));
+  }
+
+  // JST 時間でソート
+  evs.sort((a,b) => new Date(a.time) - new Date(b.time));
+
+  // HTML 出力
+  await fs.writeFile('docs/index.html', generateHTML(evs), 'utf8');
+})();
