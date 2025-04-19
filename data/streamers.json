@@ -1,12 +1,18 @@
+//Youtubeページの右クリック→ページのソースを表示→ctrl+fで「channelId」
 [
   {
     "name": "真昼ねる",
-    "youtubeChannelId": "UCxxxxxxxxxxxxxxxx",
+    "youtubeChannelId": "UCI-8WyYqMymGPw9vg55HXDQ",
     "twitchUserLogin": "mahiruneru"
   },
   {
     "name": "水透ユウ",
-    "youtubeChannelId": "UCyyyyyyyyyyyyyyyy",
+    "youtubeChannelId": "UCOah55SQYynzPgQQ4wxuzkA",
     "twitchUserLogin": "minato_yu_"
+  }
+  {
+    "name": "カルプ・マーガレット",
+    "youtubeChannelId": "UCAANONySj4hE_-ch6G34MZQ",
+    "twitchUserLogin": "carpe_margaret"
   }
 ]
