@@ -162,7 +162,7 @@ function generateHTML(events, streamers) {
         : `<div class="avatar placeholder"></div>`}
     </div>
     <div class="center">
-      <div class="name">${info.name || ''}</div>
+      <div class="name">${info.name}</div>
       <div class="title">${e.title}</div>
     </div>
     <div class="right">
@@ -192,9 +192,9 @@ function generateHTML(events, streamers) {
 /** メイン処理 */
 (async () => {
   try {
-    const token   = await getTwitchToken();
-    const list    = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
-    let events    = [];
+    const token = await getTwitchToken();
+    const list  = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
+    let events  = [];
 
     for (const s of list) {
       // Twitch LIVE
@@ -214,24 +214,22 @@ function generateHTML(events, streamers) {
       }
 
       // YouTube LIVE
-      let yl = [];
       try {
-        yl = await fetchYouTube(s.youtubeChannelId, 'eventType=live');
+        const yl = await fetchYouTube(s.youtubeChannelId, 'eventType=live');
         yl.forEach(raw => events.push({ ...raw, streamerName: s.name }));
-      } catch (e) {}
+      } catch (_) {}
 
       // YouTube 予定
-      let yu = [];
       try {
-        yu = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
+        const yu = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
         yu.forEach(raw => events.push({ ...raw, streamerName: s.name }));
-      } catch (e) {}
+      } catch (_) {}
 
-      // YouTube 過去3日／未来1週間の投稿
+      // YouTube 過去3日＆未来1週間
       try {
         const yp = await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`);
         yp.forEach(raw => events.push({ ...raw, streamerName: s.name }));
-      } catch (e) {}
+      } catch (_) {}
     }
 
     // 時系列ソート
@@ -246,10 +244,9 @@ function generateHTML(events, streamers) {
       return t >= pastThreshold && t <= futureThreshold;
     });
 
-    // HTML 出力
+    // HTML生成＆書き出し
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
-
   } catch (err) {
     console.error(err);
     const msg = err.message.replace(/</g,'&lt;');
