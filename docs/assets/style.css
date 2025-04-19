@@ -10,7 +10,7 @@ body {
   color: #111;
 }
 
-/* ヘッダー（日付切り替え） */
+/* ヘッダー */
 .header {
   display: flex;
   align-items: center;
@@ -43,14 +43,12 @@ body {
   text-align: center;
 }
 
-/* 横スクロールする日付セクションのコンテナ */
+/* 日付コンテナ */
 .day-container {
   display: flex;
   overflow: hidden;
   width: 100%;
 }
-
-/* 各日 */
 .day {
   flex: 0 0 calc(100%/3);
   padding: 1rem;
@@ -67,21 +65,20 @@ body {
   font-weight: bold;
 }
 
-/* カードリストはグリッドレイアウト */
+/* カードリスト */
+.cards {
+  list-style: none;
+}
 .day .cards {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
 }
-/* current（当日）のみ 2 列表示 */
 .day.current .cards {
   grid-template-columns: 1fr 1fr;
 }
 
-/* カード共通 */
-.cards {
-  list-style: none;
-}
+/* カード */
 .card {
   position: relative;
   display: flex;
@@ -112,13 +109,12 @@ body {
   border-color: #e00;
 }
 
-/* カード内レイアウト */
-.card .inner {
+/* カード内部 */
+.inner {
   display: flex;
   width: 100%;
   align-items: center;
 }
-
 /* 左：アバター */
 .left {
   flex: 0 0 48px;
@@ -134,7 +130,7 @@ body {
   background: #ccc;
 }
 
-/* 中央：名前＋タイトル */
+/* 中央：名前・タイトル */
 .center {
   flex: 1;
   padding: 0.5rem 1rem;
@@ -164,4 +160,11 @@ body {
   background: #ccc;
   width: 120px;
   height: 68px;
+}
+
+/* イベントなしプレースホルダー */
+.no-events {
+  padding: 1rem;
+  color: #666;
+  text-align: center;
 }
