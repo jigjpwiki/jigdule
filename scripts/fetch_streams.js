@@ -87,6 +87,25 @@ async function fetchYouTube(channelId, eventType, maxResults = 5) {
   }));
 }
 
+/**
+ * ISO8601 の UTC 時刻文字列を受け取り、
+ * 日本時間の「YYYY/MM/DD HH:mm:ss」形式に整形して返す
+ */
+function formatJST(utcString) {
+  const d = new Date(utcString);
+  return d.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year:   'numeric',
+    month:  '2-digit',
+    day:    '2-digit',
+    hour:   '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+}
+
+
 function generateHTML(streamers) {
   const items = streamers.map(s => {
     const ytLive = s.youtube.live[0];
