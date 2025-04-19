@@ -159,6 +159,9 @@ function generateHTML(events, streamers) {
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+  <header class="logo-header">
+    <img src="assets/jigdule_logo.png" alt="jigdule ロゴ" class="logo">
+  </header>
   <div class="container">
     ${sections}
   </div>
