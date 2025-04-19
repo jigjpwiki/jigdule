@@ -165,13 +165,16 @@ function generateHTML(events, streamers) {
 </a>`).join('')}
 </div>`).join('\n');
 
-  return `<!DOCTYPE html>
+return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>jigdule</title>
+  <!-- ブラウザタブのタイトル -->
+  <title>じぐじゅーる | jig.jp(Vtuber事業)非公式Wiki</title>
+  <!-- ファビコン -->
+  <link rel="icon" href="assets/jigdule_favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="assets/style.css">
-</head>
++</head>
 <body>
   <header class="logo-header">
     <img src="assets/jigdule_logo.png" alt="jigdule ロゴ" class="logo">
