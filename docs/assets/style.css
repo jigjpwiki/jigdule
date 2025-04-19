@@ -43,14 +43,16 @@ body {
   text-align: center;
 }
 
-/* 日付コンテナ */
+/* 横スクロールコンテナ */
 .day-container {
   display: flex;
   overflow: hidden;
   width: 100%;
 }
+
+/* 各日セクション */
 .day {
-  flex: 0 0 calc(100%/3);
+  flex: 0 0 33.333%;   /* ３分割で画面幅にぴったり */
   padding: 1rem;
   background: #fafafa;
   border-right: 1px solid #e0e0e0;
@@ -65,16 +67,17 @@ body {
   font-weight: bold;
 }
 
-/* カードリスト */
-.cards {
-  list-style: none;
-}
+/* カードリスト：デフォルトは１列 */
 .day .cards {
+  list-style: none;
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
+  padding: 0;
 }
-.day.current .cards {
+
+/* 当日のみ２列 */
+.day.today .cards {
   grid-template-columns: 1fr 1fr;
 }
 
@@ -126,11 +129,7 @@ body {
   border-radius: 50%;
   object-fit: cover;
 }
-.avatar.placeholder {
-  background: #ccc;
-}
-
-/* 中央：名前・タイトル */
+/* 中央：名前＋タイトル */
 .center {
   flex: 1;
   padding: 0.5rem 1rem;
@@ -144,7 +143,6 @@ body {
   line-height: 1.2;
   color: #333;
 }
-
 /* 右：サムネイル */
 .right {
   flex: 0 0 120px;
@@ -152,30 +150,6 @@ body {
 }
 .thumb {
   width: 120px;
-  height: auto;
   border-radius: 4px;
   object-fit: cover;
-}
-.thumb.placeholder {
-  background: #ccc;
-  width: 120px;
-  height: 68px;
-}
-
-/* イベントなしプレースホルダー */
-.no-events {
-  padding: 1rem;
-  color: #666;
-  text-align: center;
-}
-/* 当日のセクションだけ「2列グリッド」 */
-.day.current .cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-
-/* 非 current は1列 */
-.day .cards {
-  display: grid;
-  grid-template-columns: 1fr;
 }
