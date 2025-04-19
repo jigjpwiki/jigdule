@@ -19,8 +19,10 @@ function formatTime(utc) {
 
 /** YYYY-MM-DD→YYYY/MM/DD (曜) */
 function formatDateLabel(iso) {
-  const [y,m,d] = iso.split('-').map(n=>+n);
-  const w = ['日','月','火','水','木','金','土'][ new Date(y,m-1,d).getDay() ];
+  const [y,m,d] = iso.split('-').map(n => +n);
+  const w = ['日','月','火','水','木','金','土'][
+    new Date(y, m - 1, d).getDay()
+  ];
   return `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${w})`;
 }
 
@@ -31,7 +33,7 @@ async function getTwitchToken() {
     `?client_id=${TWITCH_CLIENT_ID}` +
     `&client_secret=${TWITCH_CLIENT_SECRET}` +
     `&grant_type=client_credentials`,
-    { method:'POST' }
+    { method: 'POST' }
   );
   const json = await res.json();
   return json.access_token;
@@ -41,10 +43,12 @@ async function getTwitchToken() {
 async function fetchTwitchLive(login, token, name) {
   const res = await fetch(
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
-    { headers:{
-      'Client-ID':   TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
-    }}
+    {
+      headers: {
+        'Client-ID':   TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const { data = [] } = await res.json();
   if (!data[0]) return null;
@@ -64,19 +68,23 @@ async function fetchTwitchLive(login, token, name) {
 async function fetchTwitchVods(login, token, name) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    { headers:{
-      'Client-ID':   TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
-    }}
+    {
+      headers: {
+        'Client-ID':   TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const uid = (await ures.json()).data?.[0]?.id;
   if (!uid) return [];
   const vres = await fetch(
     `https://api.twitch.tv/helix/videos?user_id=${uid}&first=10&broadcast_type=archive`,
-    { headers:{
-      'Client-ID':   TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
-    }}
+    {
+      headers: {
+        'Client-ID':   TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const vods = (await vres.json()).data || [];
   return vods.map(v => ({
@@ -93,9 +101,10 @@ async function fetchTwitchVods(login, token, name) {
 /** YouTube 動画検索ヘルパー */
 async function fetchYouTube(channelId, params, name) {
   const url = `https://www.googleapis.com/youtube/v3/search` +
-    `?key=${YT_API_KEY}` +
-    `&channelId=${channelId}` +
-    `&part=snippet&type=video&order=date&maxResults=10&${params}`;
+              `?key=${YT_API_KEY}` +
+              `&channelId=${channelId}` +
+              `&part=snippet&type=video` +
+              `&order=date&maxResults=10&${params}`;
   const res  = await fetch(url);
   const json = await res.json();
   if (json.error) throw new Error(json.error.message);
@@ -113,7 +122,7 @@ async function fetchYouTube(channelId, params, name) {
 /** HTML組み立て */
 function generateHTML(events, streamers) {
   // 日付ごとにグループ化
-  const groups = events.reduce((acc,e) => {
+  const groups = events.reduce((acc, e) => {
     const day = e.time.split('T')[0];
     (acc[day] || (acc[day] = [])).push(e);
     return acc;
@@ -122,7 +131,7 @@ function generateHTML(events, streamers) {
 
   // 各セクション生成
   const sections = dates.map(date => {
-    const cards = groups[date].map(e => `
+    const cardsHtml = groups[date].map(e => `
 <a href="${e.url}" target="_blank" class="card ${e.status}">
   <div class="time">${formatTime(e.time)}</div>
   <div class="name">${e.streamerName}</div>
@@ -135,7 +144,7 @@ function generateHTML(events, streamers) {
 <h2>${formatDateLabel(date)}</h2>
 <hr>
 <div class="grid">
-  ${cards}
+  ${cardsHtml}
 </div>`;
   }).join('\n');
 
@@ -154,9 +163,7 @@ function generateHTML(events, streamers) {
 </html>`;
 }
 
-//――――――――――――――――――――――――――
-// メイン IIFE
-//――――――――――――――――――――――――――
+//――――メイン IIFE――――
 (async () => {
   try {
     const token = await getTwitchToken();
@@ -178,8 +185,9 @@ function generateHTML(events, streamers) {
     }
 
     // 時系列ソート（昇順）
-    events.sort((a,b) => new Date(a.time) - new Date(b.time));
-     // 昨日の ISO 日付文字列を作成
+    events.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+    // ─── フィルタ：ライブ 中 or 予定 or 昨日の過去配信───
     const todayStart = new Date();
     todayStart.setHours(0,0,0,0);
     const yesterday = new Date(todayStart);
@@ -187,18 +195,18 @@ function generateHTML(events, streamers) {
     const yesterISO = yesterday.toISOString().slice(0,10);
 
     events = events.filter(e =>
-    e.status === 'live'           // 配信中は常に残す
-    e.status === 'upcoming'    // 予定も残す
-    e.time.split('T')[0] === yesterISO  // 過去配信は「昨日」のみ
+      e.status === 'live' ||
+      e.status === 'upcoming' ||
+      e.time.split('T')[0] === yesterISO
     );
+    // ───────────────────────────────────────
 
-    // HTML書き出し（IIFE内なので await OK）
+    // HTML生成＆書き出し
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
 
   } catch (err) {
     console.error(err);
-    // エラー時も同じく await 内なので安全
     await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
   }
 })();
