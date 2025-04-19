@@ -199,7 +199,7 @@ function generateHTML(events) {
         events.push(e);
       }
 
-      // Twitch 過去配信（ライブと同じタイトル＋同日付なら除外）
+      // Twitch 過去配信
       for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
         if (!(tLive &&
               v.title === tLive.title &&
@@ -217,21 +217,9 @@ function generateHTML(events) {
       const ytUpList = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
       ytUpList.forEach(e => events.push(e));
 
-      // YouTube 当日投稿（ライブ／予定と同じタイトル＋同日付なら除外）
+      // YouTube 当日投稿（フィルタ解除：全件追加）
       const ytPastList = await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`);
-      for (const p of ytPastList) {
-        const sameLive = ytLiveList.some(l =>
-          l.title === p.title &&
-          l.time.split('T')[0] === p.time.split('T')[0]
-        );
-        const sameUp = ytUpList.some(u =>
-          u.title === p.title &&
-          u.time.split('T')[0] === p.time.split('T')[0]
-        );
-        if (!sameLive && !sameUp) {
-          events.push(p);
-        }
-      }
+      ytPastList.forEach(e => events.push(e));
     }
 
     // 時系列ソート
