@@ -113,3 +113,15 @@ hr {
 .card .title {
   padding: 0.5rem;
 }
+/* ─── ロゴ表示 ─── */
+.logo-header {
+  text-align: center;
+  margin: 1rem 0;
+}
+.logo {
+  max-width: 592px;  /* 元画像の幅 */
+  width: 100%;       /* ビューポートに合わせて縮小 */
+  height: auto;
+  /* 縦横比を保つため height は auto に */
+}
+/* ─────────────── */
