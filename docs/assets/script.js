@@ -16,37 +16,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UTC → HH:mm
   function formatTime(utc) {
-    const d = new Date(utc);
+    const d  = new Date(utc);
     const hh = String(d.getHours()).padStart(2,'0');
     const mm = String(d.getMinutes()).padStart(2,'0');
     return `${hh}:${mm}`;
   }
 
-  // コンテナを横スワイプ用に設定
+  // flex コンテナ設定
   container.style.display    = 'flex';
   container.style.transition = 'transform 0.3s ease';
   container.style.overflow   = 'hidden';
-  days.forEach(day => { day.style.flex = '0 0 100%'; });
 
-  // 今日を初期 idx
+  // 各 .day の幅を「1列分＝25% (4分割)」に
+  days.forEach(day => {
+    day.style.flex = '0 0 25%';
+  });
+
+  // 今日のセクション index
   const today = new Date().toISOString().slice(0,10);
   let idx = days.findIndex(d => d.dataset.date === today);
-  if (idx < 0) idx = 0;
+  if (idx < 0) idx = 3;  // today が最初なら at least show first as center
+  // (dates 配列は past3..today..future7 の11日分なので idx>=3)
 
-  // 更新：スライド・ラベル・ボタン・currentクラス付与
   function update() {
-    // スライド
-    container.style.transform = `translateX(-${idx * 100}%)`;
     // 日付ラベル
-    const dateStr = days[idx].dataset.date;
-    label.textContent = formatDateLabel(dateStr);
-    // ボタン活性
+    label.textContent = formatDateLabel(days[idx].dataset.date);
+    // current クラス切り替え
+    days.forEach((day,i) => day.classList.toggle('current', i === idx));
+    // translate: 「(idx - 1) * 25%」だけ左に動かし、today が2列目～3列目をまたぐように
+    const offset = Math.min(Math.max(idx - 1, 0), days.length - 4) * 25;
+    container.style.transform = `translateX(-${offset}%)`;
+    // ナビボタン活性
     prevBtn.disabled = idx === 0;
     nextBtn.disabled = idx === days.length - 1;
-    // currentクラス切り替え
-    days.forEach((day,i) => {
-      day.classList.toggle('current', i === idx);
-    });
   }
 
   prevBtn.addEventListener('click', () => {
