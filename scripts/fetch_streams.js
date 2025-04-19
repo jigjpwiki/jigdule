@@ -174,7 +174,7 @@ return `<!DOCTYPE html>
   <!-- ファビコン -->
   <link rel="icon" href="assets/jigdule_favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="assets/style.css">
-+</head>
+</head>
 <body>
   <header class="logo-header">
     <img src="assets/jigdule_logo.png" alt="jigdule ロゴ" class="logo">
