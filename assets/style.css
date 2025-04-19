@@ -37,3 +37,6 @@ th, td {
 th {
   background-color: #f4f4f4;
 }
+tr.live    { background: #ffecec; }
+tr.upcoming{ background: #fff8e1; }
+tr.past    { color: #888; }
