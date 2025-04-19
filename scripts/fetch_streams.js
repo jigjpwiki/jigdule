@@ -50,15 +50,14 @@ async function fetchTwitchLive(login, token) {
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
     {
       headers: {
-        'Client-ID':     TWITCH_CLIENT_ID,
-        Authorization:  `Bearer ${token}`
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
       }
     }
   );
   const { data } = await res.json();
   if (!data || !data[0]) return null;
   const s = data[0];
-  // サムネイルを320×180に整形
   const thumb = s.thumbnail_url
     .replace('{width}', '320')
     .replace('{height}', '180');
@@ -72,7 +71,7 @@ async function fetchTwitchLive(login, token) {
   };
 }
 
-/** Twitch 配信予定取得 */
+/** Twitch 配信予定取得（無題タイトル除外） */
 async function fetchTwitchSchedule(login, token) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
@@ -83,7 +82,7 @@ async function fetchTwitchSchedule(login, token) {
       }
     }
   );
-  const ujson = await ures.json();
+  const ujson  = await ures.json();
   const userId = ujson.data?.[0]?.id;
   if (!userId) return [];
   const res = await fetch(
@@ -95,8 +94,9 @@ async function fetchTwitchSchedule(login, token) {
       }
     }
   );
-  const segs = (await res.json()).data?.segments || [];
-  return segs.map(s => ({
+  const segs  = (await res.json()).data?.segments || [];
+  const valid = segs.filter(s => s.title && s.title.trim() !== '');
+  return valid.map(s => ({
     platform:  'Twitch 予定',
     title:     s.title,
     url:       '',
@@ -117,7 +117,7 @@ async function fetchTwitchVods(login, token) {
       }
     }
   );
-  const ujson = await ures.json();
+  const ujson  = await ures.json();
   const userId = ujson.data?.[0]?.id;
   if (!userId) return [];
   const res = await fetch(
@@ -296,7 +296,7 @@ function generateHTML(events) {
       }
     }
 
-    // 時系列ソート＆HTML出力
+    // ソート＆出力
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
     await fs.writeFile('docs/index.html', generateHTML(events), 'utf8');
 
