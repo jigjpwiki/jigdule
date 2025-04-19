@@ -27,7 +27,8 @@ function formatDateLabel(iso) {
 /** Twitch OAuthトークン取得 */
 async function getTwitchToken() {
   const res = await fetch(
-    `https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}` +
+    `https://id.twitch.tv/oauth2/token` +
+    `?client_id=${TWITCH_CLIENT_ID}` +
     `&client_secret=${TWITCH_CLIENT_SECRET}` +
     `&grant_type=client_credentials`,
     { method:'POST' }
@@ -61,7 +62,6 @@ async function fetchTwitchLive(login, token, name) {
 
 /** Twitch 過去配信（VOD）取得 */
 async function fetchTwitchVods(login, token, name) {
-  // ユーザーID取得
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
     { headers:{
@@ -115,14 +115,14 @@ function generateHTML(events, streamers) {
   // 日付ごとにグループ化
   const groups = events.reduce((acc,e) => {
     const day = e.time.split('T')[0];
-    (acc[day]||(acc[day]=[])).push(e);
+    (acc[day] || (acc[day] = [])).push(e);
     return acc;
   }, {});
   const dates = Object.keys(groups).sort();
 
-  // セクション出力
+  // 各セクション生成
   const sections = dates.map(date => {
-    const cardsHtml = groups[date].map(e => `
+    const cards = groups[date].map(e => `
 <a href="${e.url}" target="_blank" class="card ${e.status}">
   <div class="time">${formatTime(e.time)}</div>
   <div class="name">${e.streamerName}</div>
@@ -135,7 +135,7 @@ function generateHTML(events, streamers) {
 <h2>${formatDateLabel(date)}</h2>
 <hr>
 <div class="grid">
-  ${cardsHtml}
+  ${cards}
 </div>`;
   }).join('\n');
 
@@ -154,11 +154,13 @@ function generateHTML(events, streamers) {
 </html>`;
 }
 
-/** メイン処理 */
-(async() => {
+//――――――――――――――――――――――――――
+// メイン IIFE
+//――――――――――――――――――――――――――
+(async () => {
   try {
     const token = await getTwitchToken();
-    const list  = JSON.parse(await fs.readFile('data/streamers.json','utf8'));
+    const list  = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
     let events  = [];
 
     for (const s of list) {
@@ -168,7 +170,7 @@ function generateHTML(events, streamers) {
       // Twitch VOD
       const vods = await fetchTwitchVods(s.twitchUserLogin, token, s.name);
       events.push(...vods);
-      // YouTube 投稿（最新10件）
+      // YouTube 投稿
       try {
         const yts = await fetchYouTube(s.youtubeChannelId, '', s.name);
         events.push(...yts);
@@ -178,11 +180,13 @@ function generateHTML(events, streamers) {
     // 時系列ソート（昇順）
     events.sort((a,b) => new Date(a.time) - new Date(b.time));
 
-    // HTML生成＆書き出し
+    // HTML書き出し（IIFE内なので await OK）
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
-  } catch(err) {
+
+  } catch (err) {
     console.error(err);
+    // エラー時も同じく await 内なので安全
     await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
   }
 })();
