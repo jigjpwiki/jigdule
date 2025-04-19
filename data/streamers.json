@@ -1,0 +1,12 @@
+[
+  {
+    "name": "配信者A",
+    "youtubeChannelId": "UCxxxxxxxxxxxxxxxx",
+    "twitchUserLogin": "streamerA"
+  },
+  {
+    "name": "配信者B",
+    "youtubeChannelId": "UCyyyyyyyyyyyyyyyy",
+    "twitchUserLogin": "streamerB"
+  }
+]
