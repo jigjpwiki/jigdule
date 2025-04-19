@@ -22,7 +22,7 @@ function formatJST(utcString) {
   });
 }
 
-/**当日 00:00 の ISO文字列 */
+/** 当日 00:00 の ISO 文字列 */
 function todayISO() {
   const d = new Date();
   d.setHours(0,0,0,0);
@@ -45,7 +45,12 @@ async function getTwitchToken() {
 async function fetchTwitchLive(login, token) {
   const res = await fetch(
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
-    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const { data } = await res.json();
   if (!data || data.length === 0) return null;
@@ -64,13 +69,24 @@ async function fetchTwitchLive(login, token) {
 async function fetchTwitchSchedule(login, token) {
   const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
-  const userId = userRes.ok ? (await userRes.json()).data?.[0]?.id : null;
+  const userJson = await userRes.json();
+  const userId    = userJson.data?.[0]?.id;
   if (!userId) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
-    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const segs = (await res.json()).data?.segments || [];
   return segs.map(s => ({
@@ -87,9 +103,15 @@ async function fetchTwitchSchedule(login, token) {
 async function fetchTwitchVods(login, token) {
   const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
-  const userId = userRes.ok ? (await userRes.json()).data?.[0]?.id : null;
+  const userJson = await userRes.json();
+  const userId    = userJson.data?.[0]?.id;
   if (!userId) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/videos` +
@@ -97,7 +119,12 @@ async function fetchTwitchVods(login, token) {
     `&first=5` +
     `&broadcast_type=archive` +
     `&started_at=${todayISO()}`,
-    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
+    {
+      headers: {
+        'Client-ID':    TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
   const vods = (await res.json()).data || [];
   return vods.map(v => ({
@@ -110,7 +137,7 @@ async function fetchTwitchVods(login, token) {
   }));
 }
 
-/** YouTube 取得ヘルパー */
+/** YouTube データ取得ヘルパー */
 async function fetchYouTube(channelId, params) {
   const url =
     `https://www.googleapis.com/youtube/v3/search` +
@@ -198,7 +225,7 @@ function generateHTML(events) {
       (await fetchTwitchSchedule(s.twitchUserLogin, token))
         .forEach(e => events.push(e));
 
-      // Twitch 過去配信（ライブと同じタイトル＋同日なら除外）
+      // Twitch 過去配信（ライブと同じタイトル＋同日付なら除外）
       (await fetchTwitchVods(s.twitchUserLogin, token))
         .filter(v =>
           !(tLive &&
@@ -216,7 +243,7 @@ function generateHTML(events) {
       const ytUpList = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
       ytUpList.forEach(e => events.push(e));
 
-      // YouTube 当日投稿（ライブ／予定と同じタイトル＋同日なら除外）
+      // YouTube 当日投稿（ライブ／予定と同じタイトル＋同日付なら除外）
       (await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`))
         .filter(p =>
           !ytLiveList.some(l =>
@@ -234,7 +261,7 @@ function generateHTML(events) {
     // 時系列ソート
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // HTML を出力
+    // HTML 書き出し
     await fs.writeFile('docs/index.html', generateHTML(events), 'utf8');
     console.log(`▶ イベント数: ${events.length}`);
   } catch (err) {
