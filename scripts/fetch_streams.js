@@ -7,7 +7,7 @@ const YT_API_KEY           = process.env.YT_API_KEY;
 const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
-/** JST 表示用フォーマット */
+/** JST表示用フォーマット */
 function formatJST(utcString) {
   const d = new Date(utcString);
   return d.toLocaleString('ja-JP', {
@@ -22,14 +22,14 @@ function formatJST(utcString) {
   });
 }
 
-/** 当日 00:00 の ISO 文字列 */
+/**当日 00:00 の ISO文字列 */
 function todayISO() {
   const d = new Date();
   d.setHours(0,0,0,0);
   return d.toISOString();
 }
 
-/** Twitch App Token 取得 */
+/** Twitch App トークン取得 */
 async function getTwitchToken() {
   const res = await fetch(
     `https://id.twitch.tv/oauth2/token` +
@@ -45,12 +45,7 @@ async function getTwitchToken() {
 async function fetchTwitchLive(login, token) {
   const res = await fetch(
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const { data } = await res.json();
   if (!data || data.length === 0) return null;
@@ -69,24 +64,13 @@ async function fetchTwitchLive(login, token) {
 async function fetchTwitchSchedule(login, token) {
   const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const userJson = await userRes.json();
-  const userId    = userJson.data?.[0]?.id;
+  const userId = userRes.ok ? (await userRes.json()).data?.[0]?.id : null;
   if (!userId) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const segs = (await res.json()).data?.segments || [];
   return segs.map(s => ({
@@ -103,15 +87,9 @@ async function fetchTwitchSchedule(login, token) {
 async function fetchTwitchVods(login, token) {
   const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const userJson = await userRes.json();
-  const userId    = userJson.data?.[0]?.id;
+  const userId = userRes.ok ? (await userRes.json()).data?.[0]?.id : null;
   if (!userId) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/videos` +
@@ -119,12 +97,7 @@ async function fetchTwitchVods(login, token) {
     `&first=5` +
     `&broadcast_type=archive` +
     `&started_at=${todayISO()}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const vods = (await res.json()).data || [];
   return vods.map(v => ({
@@ -137,7 +110,7 @@ async function fetchTwitchVods(login, token) {
   }));
 }
 
-/** YouTube データ取得 */
+/** YouTube 取得ヘルパー */
 async function fetchYouTube(channelId, params) {
   const url =
     `https://www.googleapis.com/youtube/v3/search` +
@@ -209,7 +182,7 @@ function generateHTML(events) {
 </html>`;
 }
 
-/** メイン */
+/** メイン処理 */
 (async () => {
   try {
     const token  = await getTwitchToken();
@@ -225,7 +198,7 @@ function generateHTML(events) {
       (await fetchTwitchSchedule(s.twitchUserLogin, token))
         .forEach(e => events.push(e));
 
-      // Twitch 過去配信（※ライブと「タイトル＋日付」が同じなら除外）
+      // Twitch 過去配信（ライブと同じタイトル＋同日なら除外）
       (await fetchTwitchVods(s.twitchUserLogin, token))
         .filter(v =>
           !(tLive &&
@@ -236,22 +209,32 @@ function generateHTML(events) {
         .forEach(v => events.push(v));
 
       // YouTube LIVE
-      (await fetchYouTube(s.youtubeChannelId, 'eventType=live'))
-        .forEach(e => events.push(e));
+      const ytLiveList = await fetchYouTube(s.youtubeChannelId, 'eventType=live');
+      ytLiveList.forEach(e => events.push(e));
 
       // YouTube 予定
-      (await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming'))
-        .forEach(e => events.push(e));
+      const ytUpList = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
+      ytUpList.forEach(e => events.push(e));
 
-      // YouTube 当日投稿
+      // YouTube 当日投稿（ライブ／予定と同じタイトル＋同日なら除外）
       (await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`))
+        .filter(p =>
+          !ytLiveList.some(l =>
+            l.title === p.title &&
+            l.time.split('T')[0] === p.time.split('T')[0]
+          ) &&
+          !ytUpList.some(u =>
+            u.title === p.title &&
+            u.time.split('T')[0] === p.time.split('T')[0]
+          )
+        )
         .forEach(e => events.push(e));
     }
 
     // 時系列ソート
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // HTML 出力
+    // HTML を出力
     await fs.writeFile('docs/index.html', generateHTML(events), 'utf8');
     console.log(`▶ イベント数: ${events.length}`);
   } catch (err) {
