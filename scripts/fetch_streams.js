@@ -159,6 +159,10 @@ function generateHTML(streamers) {
       });
     }
     const html = generateHTML(results);
+    
+    console.log(`▶ 取得した配信者数: ${results.length}`);
+    results.forEach(s => console.log(`  - ${s.name}: YouTube live ${s.youtube.live.length}, Twitch live ${s.twitch.live?1:0}`));
+
     await fs.writeFile('docs/index.html', html, 'utf8');
   } catch (err) {
     console.error('Error in fetch_streams.js:', err);
