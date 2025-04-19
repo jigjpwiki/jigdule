@@ -7,9 +7,7 @@ const YT_API_KEY           = process.env.YT_API_KEY;
 const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
-/**
- * UTC 文字列 → JST「YYYY/MM/DD HH:mm:ss」形式
- */
+/** UTC → JST フォーマット */
 function formatJST(utcString) {
   const d = new Date(utcString);
   return d.toLocaleString('ja-JP', {
@@ -48,12 +46,7 @@ async function getTwitchToken() {
 async function fetchTwitchLive(login, token) {
   const res = await fetch(
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const { data } = await res.json();
   if (!data || !data[0]) return null;
@@ -71,28 +64,18 @@ async function fetchTwitchLive(login, token) {
   };
 }
 
-/** Twitch 配信予定取得（無題タイトル除外） */
+/** Twitch 配信予定取得（無題除外） */
 async function fetchTwitchSchedule(login, token) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const ujson  = await ures.json();
   const userId = ujson.data?.[0]?.id;
   if (!userId) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const segs  = (await res.json()).data?.segments || [];
   const valid = segs.filter(s => s.title && s.title.trim() !== '');
@@ -110,12 +93,7 @@ async function fetchTwitchSchedule(login, token) {
 async function fetchTwitchVods(login, token) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const ujson  = await ures.json();
   const userId = ujson.data?.[0]?.id;
@@ -126,12 +104,7 @@ async function fetchTwitchVods(login, token) {
     `&first=5` +
     `&broadcast_type=archive` +
     `&started_at=${todayISO()}`,
-    {
-      headers: {
-        'Client-ID':    TWITCH_CLIENT_ID,
-        Authorization: `Bearer ${token}`
-      }
-    }
+    { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
   const vods = (await res.json()).data || [];
   return vods.map(v => ({
@@ -232,9 +205,7 @@ function generateHTML(events) {
     for (const s of list) {
       // Twitch LIVE
       const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
-      if (tLive) {
-        events.push({ ...tLive, streamerName: s.name, avatar: s.avatar });
-      }
+      if (tLive) events.push({ ...tLive, streamerName: s.name, avatar: s.avatar });
 
       // Twitch 予定
       for (const raw of await fetchTwitchSchedule(s.twitchUserLogin, token)) {
@@ -243,11 +214,7 @@ function generateHTML(events) {
 
       // Twitch VOD（開始5分以内は除外）
       for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
-        if (
-          !(tLive &&
-            Math.abs(new Date(v.time) - new Date(tLive.time)) < 5 * 60 * 1000
-          )
-        ) {
+        if (!(tLive && Math.abs(new Date(v.time) - new Date(tLive.time)) < 5*60*1000)) {
           events.push({ ...v, streamerName: s.name, avatar: s.avatar });
         }
       }
@@ -279,14 +246,8 @@ function generateHTML(events) {
         const ytPastList = await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`);
         ytPastList
           .filter(p =>
-            !ytLiveList.some(l =>
-              l.title === p.title &&
-              l.time.split('T')[0] === p.time.split('T')[0]
-            ) &&
-            !ytUpList.some(u =>
-              u.title === p.title &&
-              u.time.split('T')[0] === p.time.split('T')[0]
-            )
+            !ytLiveList.some(l => l.title === p.title && l.time.split('T')[0] === p.time.split('T')[0]) &&
+            !ytUpList.some(u => u.title === p.title && u.time.split('T')[0] === p.time.split('T')[0])
           )
           .forEach(raw => {
             events.push({ ...raw, streamerName: s.name, avatar: s.avatar });
@@ -296,9 +257,20 @@ function generateHTML(events) {
       }
     }
 
-    // ソート＆出力
+    // 時系列ソート
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
-    await fs.writeFile('docs/index.html', generateHTML(events), 'utf8');
+
+    // フィルタリング：過去3日分、未来1週間分のみ
+    const now = new Date();
+    const pastThreshold   = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const futureThreshold = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const filtered = events.filter(e => {
+      const t = new Date(e.time);
+      return t >= pastThreshold && t <= futureThreshold;
+    });
+
+    // HTML 出力
+    await fs.writeFile('docs/index.html', generateHTML(filtered), 'utf8');
 
   } catch (err) {
     console.error(err);
