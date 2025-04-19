@@ -1,0 +1,26 @@
+body {
+  font-family: sans-serif;
+  margin: 20px;
+}
+h1 {
+  text-align: center;
+}
+.streamers {
+  list-style: none;
+  padding: 0;
+}
+.streamer {
+  border-bottom: 1px solid #ccc;
+  padding: 16px 0;
+}
+.platform {
+  margin: 8px 0 0 16px;
+}
+.platform h3 {
+  margin: 4px 0;
+}
+.platform ul {
+  list-style: disc inside;
+  margin: 4px 0 0 0;
+  padding: 0;
+}
