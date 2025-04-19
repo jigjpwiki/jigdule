@@ -106,4 +106,17 @@ body {
   height: 68px;
   background: #ccc;
 }
+/* 横スワイプ用コンテナ */
+.day-container {
+  position: relative;
+  width: 100%;
+  /* 以下は script.js で直接指定しているのでなくても動きます */
+}
+
+/* 各日セクション */
+.day {
+  /* script.js で flex:0 0 100% を設定しますが、
+     予め CSS に書いてもOKです */
+  /* flex: 0 0 100%; */
+}
 
