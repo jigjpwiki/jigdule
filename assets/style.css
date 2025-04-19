@@ -1,81 +1,50 @@
+/* ベース */
 body {
+  margin: 0;
+  padding: 1rem;
+  font-family: sans-serif;
   background: #fff;
   color: #000;
-  font-family: sans-serif;
-  padding: 1rem;
 }
-.cards {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  max-width: 800px;
+.container {
+  max-width: 960px;
   margin: auto;
-  padding: 0;
 }
 
-/* カード共通 */
-.card {
-  position: relative;
-  display: flex;
-  border: 2px solid #000;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
+/* 日付見出し */
+h2 {
+  margin: 2rem 0 0.5rem;
+  font-size: 1.4rem;
+}
+hr {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin-bottom: 1rem;
 }
 
-/* ライブ中は赤枠 */
-.card.live {
-  border-color: #e00;
+/* グリッド */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
 }
 
-/* 時刻バッジ */
-.time-badge {
-  position: absolute;
-  top: -0.75rem;
-  left: 1rem;
-  background: #fff;
-  border: 2px solid #000;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  font-weight: bold;
+/* カード */
+.card:hover {
+  border-color: #007aff;
 }
-.card.live .time-badge {
-  border-color: #e00;
-}
-
-/* 内部レイアウト */
-.inner {
-  display: flex;
+.thumb {
+  display: block;
   width: 100%;
+  height: auto;
 }
-
-/* 左：アバター */
-.left {
-  flex: 0 0 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.info {
   padding: 0.5rem;
 }
-.avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.avatar.placeholder {
-  background: #ccc;
-}
-
-/* 中央：テキスト */
-.center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0.5rem 1rem;
+.time {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 0.25rem;
 }
 .name {
   font-weight: bold;
@@ -83,40 +52,76 @@ body {
 }
 .title {
   font-size: 0.9rem;
-  color: #333;
+  line-height: 1.2;
 }
 
-/* 右：サムネイル */
-.right {
-  flex: 0 0 120px;
+/* ライブ中は赤枠 */
+.card.live {
+  border-color: #e00 !important;
+  border-width: 4px
+}
+/* シンプルカードレイアウト */
+.container {
+  max-width: 960px;
+  margin: auto;
+  padding: 1rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+  gap: 1rem;
+}
+.card {
+  display: block;
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+.card .time {
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  background: #f0f0f0;
+}
+.card .name {
+  padding: 0 0.5rem;
+  font-weight: bold;
+}
+.card .thumb {
+  width: 100%;
+  display: block;
+}
+.card .title {
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+/* カードヘッダーで左右配置 */
+.card-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
   padding: 0.5rem;
 }
-.thumb {
-  width: 120px;
-  height: auto;
-  object-fit: cover;
-  border: 1px solid #000;
-  border-radius: 4px;
-}
-.thumb.placeholder {
-  width: 120px;
-  height: 68px;
-  background: #ccc;
-}
-/* 横スワイプ用コンテナ */
-.day-container {
-  position: relative;
+/* カード本体の余白調整 */
+.card .thumb {
   width: 100%;
-  /* 以下は script.js で直接指定しているのでなくても動きます */
+  display: block;
 }
-
-/* 各日セクション */
-.day {
-  /* script.js で flex:0 0 100% を設定しますが、
-     予め CSS に書いてもOKです */
-  /* flex: 0 0 100%; */
+.card .title {
+  padding: 0.5rem;
 }
-
+/* ─── ロゴ表示 ─── */
+.logo-header {
+  text-align: center;
+  margin: 1rem 0;
+}
+.logo {
+  max-width: 296px;  /* 元画像の幅 */
+  width: 100%;       /* ビューポートに合わせて縮小 */
+  height: auto;
+  /* 縦横比を保つため height は auto に */
+}
+/* ─────────────── */
