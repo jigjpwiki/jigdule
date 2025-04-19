@@ -86,20 +86,23 @@ async function fetchTwitchVods(login, token, name) {
   );
   const vods = (await vres.json()).data || [];
   return vods.map(v => {
-    // VOD用サムネも同様に置換
-    const vodTemplate = v.thumbnail_url;
-    const vodThumb = vodTemplate
-      .replace('{width}','320').replace('{height}','180')
-      .replace('%{width}','320').replace('%{height}','180');
+    // 生の {width}/{height} と URL エンコード済み %7Bwidth%7D/%7Bheight%7D の両方を置き換え
+    let thumb = v.thumbnail_url;
+    thumb = thumb
+      .replace(/\{width\}/g,  '320')
+      .replace(/\{height\}/g, '180')
+      .replace(/%7Bwidth%7D/g,  '320')
+      .replace(/%7Bheight%7D/g, '180');
     return {
       streamerName: name,
       platform:     'Twitch',
       title:        v.title,
       url:          v.url,
       time:         v.created_at,
-      thumbnail:    vodThumb,
+      thumbnail:    thumb,
       status:       'past'
     };
+  });
   });
 }
 
