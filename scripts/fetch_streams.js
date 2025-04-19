@@ -7,29 +7,29 @@ const YT_API_KEY           = process.env.YT_API_KEY;
 const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
-/** JST表示用フォーマット */
+/** UTC → JST フォーマット */
 function formatJST(utcString) {
   const d = new Date(utcString);
   return d.toLocaleString('ja-JP', {
     timeZone: 'Asia/Tokyo',
     hour12: false,
-    year:   'numeric',
-    month:  '2-digit',
-    day:    '2-digit',
-    hour:   '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
+    year:    'numeric',
+    month:   '2-digit',
+    day:     '2-digit',
+    hour:    '2-digit',
+    minute:  '2-digit',
+    second:  '2-digit'
   });
 }
 
-/** 当日 00:00 の ISO 文字列 */
+/** 当日 00:00 の ISO */
 function todayISO() {
   const d = new Date();
   d.setHours(0,0,0,0);
   return d.toISOString();
 }
 
-/** Twitch App トークン取得 */
+/** Twitch OAuth Token */
 async function getTwitchToken() {
   const res = await fetch(
     `https://id.twitch.tv/oauth2/token` +
@@ -38,7 +38,8 @@ async function getTwitchToken() {
     `&grant_type=client_credentials`,
     { method: 'POST' }
   );
-  return (await res.json()).access_token;
+  const json = await res.json();
+  return json.access_token;
 }
 
 /** Twitch ライブ中ストリーム取得 */
@@ -50,17 +51,22 @@ async function fetchTwitchLive(login, token) {
   const { data } = await res.json();
   if (!data || !data[0]) return null;
   const s = data[0];
+  // thumbnail_url テンプレートを 320x180 に
+  const thumb = s.thumbnail_url
+    .replace('{width}', '320')
+    .replace('{height}', '180');
   return {
-    platform: 'Twitch LIVE',
-    streamer: login,
-    title:    s.title,
-    url:      `https://twitch.tv/${login}`,
-    time:     s.started_at,
-    status:   'live'
+    platform:  'Twitch LIVE',
+    streamer:  login,
+    title:     s.title,
+    url:       `https://twitch.tv/${login}`,
+    time:      s.started_at,
+    status:    'live',
+    thumbnail: thumb
   };
 }
 
-/** Twitch 予定取得 */
+/** Twitch 予定（スケジュール）取得 */
 async function fetchTwitchSchedule(login, token) {
   const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
@@ -75,12 +81,13 @@ async function fetchTwitchSchedule(login, token) {
   );
   const segs = (await res.json()).data?.segments || [];
   return segs.map(s => ({
-    platform: 'Twitch 予定',
-    streamer: login,
-    title:    s.title,
-    url:      '',
-    time:     s.start_time,
-    status:   'upcoming'
+    platform:  'Twitch 予定',
+    streamer:  login,
+    title:     s.title,
+    url:       '',
+    time:      s.start_time,
+    status:    'upcoming',
+    thumbnail: ''  // 予定にはサムネイル無し
   }));
 }
 
@@ -103,16 +110,19 @@ async function fetchTwitchVods(login, token) {
   );
   const vods = (await res.json()).data || [];
   return vods.map(v => ({
-    platform: 'Twitch 過去配信',
-    streamer: login,
-    title:    v.title,
-    url:      v.url,
-    time:     v.created_at,
-    status:   'past'
+    platform:  'Twitch 過去配信',
+    streamer:  login,
+    title:     v.title,
+    url:       v.url,
+    time:      v.created_at,
+    status:    'past',
+    thumbnail: v.thumbnail_url
+      ? v.thumbnail_url.replace('{width}', '320').replace('{height}', '180')
+      : ''
   }));
 }
 
-/** YouTube 検索ヘルパー（Quota エラー時は例外を投げる） */
+/** YouTube 検索ヘルパー */
 async function fetchYouTube(channelId, params) {
   const url =
     `https://www.googleapis.com/youtube/v3/search` +
@@ -124,38 +134,46 @@ async function fetchYouTube(channelId, params) {
   const json = await res.json();
   if (json.error) throw new Error(`YouTube API error: ${json.error.code} ${json.error.message}`);
   return (json.items || []).map(item => {
+    // medium サイズのサムネイルを利用
+    const thumb = item.snippet.thumbnails.medium.url;
     const isLive     = params.includes('eventType=live');
     const isUpcoming = params.includes('eventType=upcoming');
     return {
-      platform: isLive
+      platform:  isLive
         ? 'YouTube LIVE'
         : isUpcoming
           ? 'YouTube 予定'
           : 'YouTube 投稿',
-      streamer: channelId,
-      title:    item.snippet.title,
-      url:      `https://youtu.be/${item.id.videoId}`,
-      time:     item.snippet.publishedAt,
-      status:   isLive
-        ? 'live'
-        : isUpcoming
-          ? 'upcoming'
-          : 'past'
+      streamer:  channelId,
+      title:     item.snippet.title,
+      url:       `https://youtu.be/${item.id.videoId}`,
+      time:      item.snippet.publishedAt,
+      status:    isLive ? 'live' : isUpcoming ? 'upcoming' : 'past',
+      thumbnail: thumb
     };
   });
 }
 
 /** HTML 生成 */
 function generateHTML(events) {
+  // テーブルのヘッダーにサムネイル列を追加
+  const header = `
+<tr>
+  <th>時間 (JST)</th>
+  <th>ステータス</th>
+  <th>種別</th>
+  <th>配信者/チャンネル</th>
+  <th>サムネイル</th>
+  <th>タイトル</th>
+</tr>`;
+
   const rows = events.map(e => `
 <tr class="${e.status}">
   <td>${formatJST(e.time)}</td>
-  <td>${
-    e.status === 'live'     ? '<strong>LIVE</strong>' :
-    e.status === 'upcoming' ? '予定'            : '過去'
-  }</td>
+  <td>${e.status === 'live' ? '<strong>LIVE</strong>' : e.status === 'upcoming' ? '予定' : '過去'}</td>
   <td>${e.platform}</td>
   <td>${e.streamer}</td>
+  <td>${e.thumbnail ? `<img src="${e.thumbnail}" width="120" alt="">` : ''}</td>
   <td><a href="${e.url}" target="_blank">${e.title}</a></td>
 </tr>`).join('');
 
@@ -170,13 +188,7 @@ function generateHTML(events) {
   <h1>当日のライブ & 動画タイムテーブル</h1>
   <table>
     <thead>
-      <tr>
-        <th>時間 (JST)</th>
-        <th>ステータス</th>
-        <th>種別</th>
-        <th>配信者/チャンネル</th>
-        <th>タイトル</th>
-      </tr>
+      ${header}
     </thead>
     <tbody>
       ${rows}
@@ -186,50 +198,32 @@ function generateHTML(events) {
 </html>`;
 }
 
-/** エラー専用 HTML 生成（Twitch 側の致命的エラー用） */
-function generateErrorHTML(err) {
-  const msg = err.message || String(err);
-  return `<!DOCTYPE html>
-<html lang="ja">
-<head><meta charset="UTF-8"><title>更新エラー</title></head>
-<body>
-  <h1>更新中にエラーが発生しました</h1>
-  <pre>${msg}</pre>
-</body>
-</html>`;
-}
-
 /** メイン処理 */
 (async () => {
   try {
-    const token  = await getTwitchToken();
-    const list   = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
+    const token = await getTwitchToken();
+    const list  = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
     const events = [];
 
     for (const s of list) {
       // Twitch LIVE
-const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
-if (tLive) events.push(tLive);
+      const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
+      if (tLive) events.push(tLive);
 
-// Twitch 予定
-for (const e of await fetchTwitchSchedule(s.twitchUserLogin, token)) {
-  events.push(e);
-}
+      // Twitch 予定
+      (await fetchTwitchSchedule(s.twitchUserLogin, token))
+        .forEach(e => events.push(e));
 
-// Twitch 過去配信（開始時刻5分以内は除外）
-for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
-  if (
-    !(tLive &&
-      Math.abs(new Date(v.time) - new Date(tLive.time)) < 5 * 60 * 1000
-    )
-  ) {
-    events.push(v);
-  }
-}
+      // Twitch 過去配信（開始5分以内は除外）
+      (await fetchTwitchVods(s.twitchUserLogin, token))
+        .filter(v =>
+          !(tLive &&
+            Math.abs(new Date(v.time) - new Date(tLive.time)) < 5*60*1000
+          )
+        )
+        .forEach(v => events.push(v));
 
-// …YouTube 部分はそのまま…
-
-      // --- YouTube 部分は個別 try/catch ---
+      // YouTube LIVE
       let ytLiveList = [];
       try {
         ytLiveList = await fetchYouTube(s.youtubeChannelId, 'eventType=live');
@@ -238,6 +232,7 @@ for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
         console.error('YouTube LIVE error:', e.message);
       }
 
+      // YouTube 予定
       let ytUpList = [];
       try {
         ytUpList = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming');
@@ -246,20 +241,13 @@ for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
         console.error('YouTube upcoming error:', e.message);
       }
 
-      let ytPastList = [];
+      // YouTube 当日投稿（重複排除ロジックも残しています）
       try {
-        ytPastList = await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`);
-        // ここは重複除外ロジックを戻します
+        const ytPastList = await fetchYouTube(s.youtubeChannelId, `publishedAfter=${todayISO()}`);
         ytPastList
           .filter(p =>
-            !ytLiveList.some(l =>
-              l.title === p.title &&
-              l.time.split('T')[0] === p.time.split('T')[0]
-            ) &&
-            !ytUpList.some(u =>
-              u.title === p.title &&
-              u.time.split('T')[0] === p.time.split('T')[0]
-            )
+            !ytLiveList.some(l => l.title === p.title && l.time.split('T')[0] === p.time.split('T')[0]) &&
+            !ytUpList.some(u => u.title === p.title && u.time.split('T')[0] === p.time.split('T')[0])
           )
           .forEach(e => events.push(e));
       } catch (e) {
@@ -267,13 +255,15 @@ for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
       }
     }
 
-    // 時系列ソート と HTML 出力
-    events.sort((a, b) => new Date(a.time) - new Date(b.time));
+    // 時系列ソート＆出力
+    events.sort((a,b)=>new Date(a.time)-new Date(b.time));
     await fs.writeFile('docs/index.html', generateHTML(events), 'utf8');
 
   } catch (err) {
-    // Twitch 側などの致命的エラーのみここでキャッチ
     console.error(err);
-    await fs.writeFile('docs/index.html', generateErrorHTML(err), 'utf8');
+    // 致命的エラー(主にTwitch周り)はページ全体をエラー表示に
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>更新エラー</title></head>
+<body><h1>更新中にエラーが発生しました</h1><pre>${err.message}</pre></body></html>`;
+    await fs.writeFile('docs/index.html', html, 'utf8');
   }
 })();
