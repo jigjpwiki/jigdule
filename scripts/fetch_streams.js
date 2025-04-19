@@ -1,4 +1,112 @@
-function generateHTML(streamers) {
+'use strict';
+ 
+ const fs = require('fs').promises;
+ const fetch = require('node-fetch');
+ 
+ const YT_API_KEY            = process.env.YT_API_KEY;
+ const TWITCH_CLIENT_ID      = process.env.TWITCH_CLIENT_ID;
+ const TWITCH_CLIENT_SECRET  = process.env.TWITCH_CLIENT_SECRET;
+ 
+ async function getTwitchToken() {
+   const res = await fetch(
+     `https://id.twitch.tv/oauth2/token?` +
+     `client_id=${TWITCH_CLIENT_ID}` +
+     `&client_secret=${TWITCH_CLIENT_SECRET}` +
+     `&grant_type=client_credentials`,
+     { method: 'POST' }
+   );
+   const json = await res.json();
+   return json.access_token;
+ }
+ 
+ async function fetchTwitchLive(login, token) {
+   const res = await fetch(
+     `https://api.twitch.tv/helix/streams?user_login=${login}`,
+     {
+       headers: {
+         'Client-ID': TWITCH_CLIENT_ID,
+         Authorization: `Bearer ${token}`
+       }
+     }
+   );
+   const { data } = await res.json();
+   if (!data || data.length === 0) return null;
+   const s = data[0];
+   return {
+     title:     s.title,
+     startTime: s.started_at,
+     url:       `https://twitch.tv/${login}`
+   };
+ }
+ 
+ async function fetchTwitchSchedule(login, token) {
+   // ユーザーIDを取得
+   const userRes = await fetch(
+     `https://api.twitch.tv/helix/users?login=${login}`,
+     {
+       headers: {
+         'Client-ID': TWITCH_CLIENT_ID,
+         Authorization: `Bearer ${token}`
+       }
+     }
+   );
+   const userJson = await userRes.json();
+   const userId = userJson.data?.[0]?.id;
+   if (!userId) return [];
+   // スケジュール取得
+   const res = await fetch(
+     `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
+     {
+       headers: {
+         'Client-ID': TWITCH_CLIENT_ID,
+         Authorization: `Bearer ${token}`
+       }
+     }
+   );
+   const json = await res.json();
+   return (json.data?.segments || []).map(s => ({
+     title:     s.title,
+     startTime: s.start_time
+   }));
+ }
+ 
+ async function fetchYouTube(channelId, eventType, maxResults = 5) {
+   const url =
+     `https://www.googleapis.com/youtube/v3/search?` +
+     `key=${YT_API_KEY}` +
+     `&channelId=${channelId}` +
+     `&part=snippet&type=video` +
+     `&eventType=${eventType}` +
+     `&maxResults=${maxResults}`;
+   const res = await fetch(url);
+   const json = await res.json();
+   return (json.items || []).map(item => ({
+     title: item.snippet.title,
+     time:  item.snippet.publishedAt,
+     url:   `https://youtu.be/${item.id.videoId}`
+   }));
+ }
+ 
+ /**
+  * ISO8601 の UTC 時刻文字列を受け取り、
+  * 日本時間の「YYYY/MM/DD HH:mm:ss」形式に整形して返す
+  */
+ function formatJST(utcString) {
+   const d = new Date(utcString);
+   return d.toLocaleString('ja-JP', {
+     timeZone: 'Asia/Tokyo',
+     year:   'numeric',
+     month:  '2-digit',
+     day:    '2-digit',
+     hour:   '2-digit',
+     minute: '2-digit',
+     second: '2-digit',
+     hour12: false
+   });
+ }
+ 
+ 
+ function generateHTML(streamers) {
   const items = streamers.map(s => {
     const ytLive = s.youtube.live[0];
     const ytUp   = s.youtube.upcoming;
@@ -66,3 +174,33 @@ function generateHTML(streamers) {
 </body>
 </html>`;
 }
+
+ 
+ (async () => {
+   try {
+     const token = await getTwitchToken();
+     const listTxt = await fs.readFile('data/streamers.json', 'utf8');
+     const list    = JSON.parse(listTxt);
+     const results = [];
+     for (const s of list) {
+       const ytLive = await fetchYouTube(s.youtubeChannelId, 'live', 1);
+       const ytUp   = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
+       const twLive = await fetchTwitchLive(s.twitchUserLogin, token);
+       const twSch  = await fetchTwitchSchedule(s.twitchUserLogin, token);
+       results.push({
+         name:    s.name,
+         youtube: { live: ytLive, upcoming: ytUp },
+         twitch:  { live: twLive, schedule: twSch }
+       });
+     }
+     const html = generateHTML(results);
+     console.log(formatJST("2025-04-19T12:00:01Z"));
+     console.log(`▶ 取得した配信者数: ${results.length}`);
+     results.forEach(s => console.log(`  - ${s.name}: YouTube live ${s.youtube.live.length}, Twitch live ${s.twitch.live?1:0}`));
+ 
+     await fs.writeFile('docs/index.html', html, 'utf8');
+   } catch (err) {
+     console.error('Error in fetch_streams.js:', err);
+     process.exit(1);
+   }
+ })();
