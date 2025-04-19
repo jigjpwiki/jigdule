@@ -166,5 +166,5 @@ function generateHTML(streamers) {
     });
   }
   const html = generateHTML(results);
-  await fs.writeFile('index.html', html, 'utf8');
+  await fs.writeFile('docs/index.html', html, 'utf8');
 })();
