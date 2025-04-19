@@ -1,52 +1,109 @@
 body {
+  background: #fff;
+  color: #000;
   font-family: sans-serif;
-  margin: 20px;
+  padding: 1rem;
 }
-h1 {
-  text-align: center;
-}
-.streamers {
+.cards {
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 800px;
+  margin: auto;
   padding: 0;
 }
-.streamer {
-  border-bottom: 1px solid #ccc;
-  padding: 16px 0;
+
+/* カード共通 */
+.card {
+  position: relative;
+  display: flex;
+  border: 2px solid #000;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
 }
-.platform {
-  margin: 8px 0 0 16px;
+
+/* ライブ中は赤枠 */
+.card.live {
+  border-color: #e00;
 }
-.platform h3 {
-  margin: 4px 0;
+
+/* 時刻バッジ */
+.time-badge {
+  position: absolute;
+  top: -0.75rem;
+  left: 1rem;
+  background: #fff;
+  border: 2px solid #000;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: bold;
 }
-.platform ul {
-  list-style: disc inside;
-  margin: 4px 0 0 0;
-  padding: 0;
+.card.live .time-badge {
+  border-color: #e00;
 }
-table {
+
+/* 内部レイアウト */
+.inner {
+  display: flex;
   width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
 }
-th, td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  text-align: left;
+
+/* 左：アバター */
+.left {
+  flex: 0 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
 }
-th {
-  background-color: #f4f4f4;
-}
-tr.live    { background: #ffecec; }
-tr.upcoming{ background: #fff8e1; }
-tr.past    { color: #888; }
 .avatar {
   width: 48px;
   height: 48px;
-  object-fit: cover;
   border-radius: 50%;
+  object-fit: cover;
 }
-table th,
-table td {
-  vertical-align: middle;
+.avatar.placeholder {
+  background: #ccc;
 }
+
+/* 中央：テキスト */
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+}
+.name {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+.title {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+/* 右：サムネイル */
+.right {
+  flex: 0 0 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+.thumb {
+  width: 120px;
+  height: auto;
+  object-fit: cover;
+  border: 1px solid #000;
+  border-radius: 4px;
+}
+.thumb.placeholder {
+  width: 120px;
+  height: 68px;
+  background: #ccc;
+}
+
