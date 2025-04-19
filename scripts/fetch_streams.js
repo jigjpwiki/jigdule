@@ -180,17 +180,17 @@ function generateHTML(events, streamers) {
     // 時系列ソート（昇順）
     events.sort((a,b) => new Date(a.time) - new Date(b.time));
      // 昨日の ISO 日付文字列を作成
-+   const todayStart = new Date();
-+   todayStart.setHours(0,0,0,0);
-+   const yesterday = new Date(todayStart);
-+   yesterday.setDate(yesterday.getDate() - 1);
-+   const yesterISO = yesterday.toISOString().slice(0,10);
-+
-+   events = events.filter(e =>
-+   e.status === 'live'           // 配信中は常に残す
-+   || e.status === 'upcoming'    // 予定も残す
-+   || e.time.split('T')[0] === yesterISO  // 過去配信は「昨日」のみ
-+ );
+    const todayStart = new Date();
+    todayStart.setHours(0,0,0,0);
+    const yesterday = new Date(todayStart);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterISO = yesterday.toISOString().slice(0,10);
+
+    events = events.filter(e =>
+    e.status === 'live'           // 配信中は常に残す
+    e.status === 'upcoming'    // 予定も残す
+    e.time.split('T')[0] === yesterISO  // 過去配信は「昨日」のみ
+    );
 
     // HTML書き出し（IIFE内なので await OK）
     const html = generateHTML(events, list);
