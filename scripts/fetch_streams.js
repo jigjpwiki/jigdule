@@ -20,9 +20,7 @@ function formatTime(utc) {
 /** ISO日付キー→「YYYY/MM/DD (曜)」 */
 function formatDateLabel(iso) {
   const [y,m,d] = iso.split('-').map(n=>+n);
-  const w = ['日','月','火','水','木','金','土'][
-    new Date(y,m-1,d).getDay()
-  ];
+  const w = ['日','月','火','水','木','金','土'][ new Date(y,m-1,d).getDay() ];
   return `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${w})`;
 }
 
@@ -56,11 +54,10 @@ async function fetchTwitchLive(login, token, name) {
   const { data = [] } = await res.json();
   if (!data[0]) return null;
   const s = data[0];
-  // ライブ中サムネは {width}/{height} 置換
   const liveTemplate = s.thumbnail_url;
   const liveThumb = liveTemplate
-    .replace('{width}','320').replace('{height}','180')
-    .replace('%{width}','320').replace('%{height}','180');
+    .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
+    .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180');
   return {
     streamerName: name,
     platform:     'Twitch',
@@ -86,7 +83,6 @@ async function fetchTwitchVods(login, token, name) {
   );
   const vods = (await vres.json()).data || [];
   return vods.map(v => {
-    // 生の {width}/{height} と URL エンコード済み %7Bwidth%7D/%7Bheight%7D の両方を置き換え
     let thumb = v.thumbnail_url;
     thumb = thumb
       .replace(/\{width\}/g,  '320')
@@ -102,7 +98,6 @@ async function fetchTwitchVods(login, token, name) {
       thumbnail:    thumb,
       status:       'past'
     };
-  });
   });
 }
 
@@ -122,7 +117,7 @@ async function fetchYouTube(channelId, params, name) {
     url:          `https://youtu.be/${item.id.videoId}`,
     time:         item.snippet.publishedAt,
     thumbnail:    item.snippet.thumbnails.medium.url,
-    status:       item.snippet.liveBroadcastContent==='live'
+    status:       item.snippet.liveBroadcastContent === 'live'
                    ? 'live'
                    : params.includes('eventType=upcoming')
                      ? 'upcoming'
@@ -178,7 +173,7 @@ function generateHTML(events, streamers) {
 </html>`;
 }
 
-// メイン IIFE
+//――――メイン IIFE――――
 (async () => {
   try {
     const token = await getTwitchToken();
@@ -186,7 +181,7 @@ function generateHTML(events, streamers) {
     let events  = [];
 
     for (const s of list) {
-      const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
+      const tl   = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
       const vods = await fetchTwitchVods(s.twitchUserLogin, token, s.name);
       events.push(...vods);
@@ -200,9 +195,10 @@ function generateHTML(events, streamers) {
       } catch {}
     }
 
+    // 時系列ソート（昇順）
     events.sort((a,b) => new Date(a.time) - new Date(b.time));
 
-    // フィルタ: ライブ or 予定 or 昨日のVODのみ
+    // フィルタ: ライブ or 予定 or JST昨日のVODのみ
     const nowJst = new Date(Date.now() + 9*3600*1000);
     nowJst.setUTCHours(0,0,0,0);
     const yest = new Date(nowJst);
@@ -210,11 +206,12 @@ function generateHTML(events, streamers) {
     const yestKey = `${yest.getUTCFullYear()}-${String(yest.getUTCMonth()+1).padStart(2,'0')}-${String(yest.getUTCDate()).padStart(2,'0')}`;
 
     events = events.filter(e =>
-      e.status==='live' ||
-      e.status==='upcoming' ||
-      getJstDateKey(e.time)===yestKey
+      e.status === 'live' ||
+      e.status === 'upcoming' ||
+      getJstDateKey(e.time) === yestKey
     );
 
+    // HTML生成＆書き出し
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
   } catch (err) {
