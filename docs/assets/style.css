@@ -58,6 +58,7 @@ hr {
 /* ライブ中は赤枠 */
 .card.live {
   border-color: #e00 !important;
+  border-width: 2px
 }
 /* シンプルカードレイアウト */
 .container {
