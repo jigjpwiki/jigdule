@@ -265,6 +265,5 @@ function generateErrorHTML(err) {
   } catch (err) {
     console.error(err);
     await fs.writeFile('docs/index.html', generateErrorHTML(err), 'utf8');
-    process.exit(1);
   }
 })();
