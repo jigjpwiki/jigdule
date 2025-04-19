@@ -40,3 +40,13 @@ th {
 tr.live    { background: #ffecec; }
 tr.upcoming{ background: #fff8e1; }
 tr.past    { color: #888; }
+.avatar {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+table th,
+table td {
+  vertical-align: middle;
+}
