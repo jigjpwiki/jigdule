@@ -186,6 +186,8 @@ return `<!DOCTYPE html>
     <p>
       <a href="https://wikiwiki.jp/jigjp/" target="_blank">jig.jpWikiトップ</a> |
       管理者X・お問い合わせ窓口: <a href="https://x.com/Jigjpwiki" target="_blank">@Jigjpwiki</a>
+    </p>
+    <p>
       配信中の枠が2つ現れてしまう不具合について調査中です
     </p>
   </footer>
