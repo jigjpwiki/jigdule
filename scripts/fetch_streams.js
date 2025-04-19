@@ -69,34 +69,37 @@ async function fetchTwitchLive(login, token, name) {
   };
 }
 
-/** Twitch VOD（過去配信）取得 */
+/** Twitch VOD（過去配信）取得＋デバッグ出力 */
 async function fetchTwitchVods(login, token, name) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
-    { headers:{ 'Client-ID':TWITCH_CLIENT_ID, Authorization:`Bearer ${token}` }}
+    { headers:{ 'Client-ID': TWITCH_CLIENT_ID, Authorization:`Bearer ${token}` }}
   );
   const uid = (await ures.json()).data?.[0]?.id;
   if (!uid) return [];
 
   const vres = await fetch(
     `https://api.twitch.tv/helix/videos?user_id=${uid}&first=10&broadcast_type=archive`,
-    { headers:{ 'Client-ID':TWITCH_CLIENT_ID, Authorization:`Bearer ${token}` }}
+    { headers:{ 'Client-ID': TWITCH_CLIENT_ID, Authorization:`Bearer ${token}` }}
   );
   const vods = (await vres.json()).data || [];
 
   return vods.map(v => {
-    let thumb = v.thumbnail_url;
+    const raw = v.thumbnail_url;
+    // 置換ルール
+    let thumb = raw
+      // {width}/{height}
+      .replace(/\{width\}/g, '320')
+      .replace(/\{height\}/g, '180')
+      // %7Bwidth%7D/%7Bheight%7D
+      .replace(/%7Bwidth%7D/g, '320')
+      .replace(/%7Bheight%7D/g, '180')
+      // 固定解像度 640x360.jpg → 320x180.jpg
+      .replace(/\d+x\d+\.jpg/, '320x180.jpg');
 
-    // 1) {width}/{height} プレースホルダ
-    thumb = thumb
-      .replace(/\{width\}/g,  '320')
-      .replace(/\{height\}/g, '180');
-    // 2) %7Bwidth%7D/%7Bheight%7D (URLエンコード済み)
-    thumb = thumb
-      .replace(/%7Bwidth%7D/g,  '320')
-      .replace(/%7Bheight%7D/g, '180');
-    // 3) 固定解像度 "1234x567.jpg" の形式 (例: 640x360.jpg → 320x180.jpg)
-    thumb = thumb.replace(/\d+x\d+\.jpg/, '320x180.jpg');
+    // デバッグログ
+    console.log(`VOD thumb raw:     ${raw}`);
+    console.log(`VOD thumb replaced:${thumb}`);
 
     return {
       streamerName: name,
@@ -109,6 +112,7 @@ async function fetchTwitchVods(login, token, name) {
     };
   });
 }
+
 
 
 /** YouTube 検索ヘルパー */
