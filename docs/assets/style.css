@@ -1,46 +1,70 @@
-body {
-  font-family: sans-serif;
-  margin: 20px;
-}
+/* リセット＆モノクロ基調 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: sans-serif; background: #fff; color: #000; }
+a { color: #000; text-decoration: none; }
 
-h1 {
-  text-align: center;
-}
-
-.streamers {
-  list-style: none;
-  padding: 0;
-}
-
-.streamer {
+/* ヘッダー */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid #ccc;
-  padding: 16px 0;
+}
+.title {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.nav-buttons {
+  display: flex;
+  align-items: center;
+}
+.nav-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #000;
+  padding: 0 0.5rem;
+}
+.nav-btn:focus { outline: 2px solid #000; }
+.date-label {
+  min-width: 8em;
+  text-align: center;
+  font-weight: bold;
 }
 
-.platform {
-  margin: 8px 0 0 16px;
+/* 横スクロールコンテナ */
+.day-container {
+  display: flex;
+  overflow: hidden;
+  width: 100%;
+}
+/* 各日セクション */
+.day {
+  flex: 0 0 100%;
+  padding: 1rem;
+}
+/* 日付見出し */
+.day h2 {
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 0.25rem;
 }
 
-.platform h3 {
-  margin: 4px 0;
+/* 内部コンテンツ例 */
+.day ul {
+  list-style: none;
+  margin-top: 1rem;
+}
+.day li {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
 }
 
-.platform ul {
-  list-style: disc inside;
-  margin: 4px 0 0 0;
-  padding: 0;
-}
+/* アバター・サムネイル */
+.avatar { width: 48px; height: 48px; object-fit: cover; border-radius: 50%; }
+.thumb  { width: 120px; height: auto; object-fit: cover; }
 
-.streamer a {
-  text-decoration: none;
-  color: #0066cc;
-}
-
-.streamer a:hover {
-  text-decoration: underline;
-}
-
-time {
-  font-size: 0.9em;
-  color: #666;
-}
+/* テーブル風にするなら既存スタイルを再利用してください */
