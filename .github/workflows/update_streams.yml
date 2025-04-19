@@ -1,11 +1,14 @@
 name: Update Stream Status
 
 on:
+  # 15分ごとのスケジュール実行
   schedule:
     - cron: '*/15 * * * *'
+  # プッシュ時にも自動実行
   push:
     branches:
       - main
+  # GUI からの手動実行を可能にする
   workflow_dispatch:
 
 jobs:
