@@ -7,45 +7,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const nextBtn   = document.getElementById('nextBtn');
   const label     = document.getElementById('dateLabel');
 
-  // 日付ラベル生成
+  // YYYY-MM-DD → MM/DD (曜)
   function formatDateLabel(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(n=>+n);
-    const w = ['日','月','火','水','木','金','土'][ new Date(y, m-1, d).getDay() ];
+    const [y, m, d] = dateStr.split('-').map(n => +n);
+    const w = ['日','月','火','水','木','金','土'][
+      new Date(y, m - 1, d).getDay()
+    ];
     return `${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${w})`;
   }
 
-  // 横スワイプコンテナ設定
+  // コンテナを横スワイプ用に設定
   container.style.display    = 'flex';
   container.style.transition = 'transform 0.3s ease';
   container.style.overflow   = 'hidden';
 
-  // 各.day の幅を「25%」、後で .current を「50%」にする
+  // 各 .day を 1/3 幅に
   days.forEach(day => {
-    day.style.flex = '0 0 25%';
+    day.style.flex = '0 0 33.333%';
   });
 
-  // 今日の index を決定
-  const today = new Date().toISOString().slice(0,10);
+  // 今日の日付を持つセクションに .today を付与
+  const today = new Date().toISOString().slice(0, 10);
+  days.forEach(day => {
+    if (day.dataset.date === today) {
+      day.classList.add('today');
+    }
+  });
+
+  // 今日を中心に見せるための初期 idx（today の位置を 2番目に）
   let idx = days.findIndex(d => d.dataset.date === today);
-  if (idx < 0) idx = 3; // 日付リストのうち、4番目(過去3日を飛ばして)を中心に
-
+  if (idx < 0) idx = 1;  // 見つからなければ 1
+  // スライドは (idx - 1) * 33.333%
   function update() {
-    // currentクラス切替→CSSで幅50%に
-    days.forEach((day,i) => {
-      day.classList.toggle('current', i === idx);
-    });
-
-    // translateX を「(idx-1)*25%」にして、常に中央にtodayが来るよう調整
-    const maxOffset = days.length - 3;
-    let offsetIdx = idx - 1;
-    if (offsetIdx < 0) offsetIdx = 0;
-    if (offsetIdx > maxOffset) offsetIdx = maxOffset;
-    container.style.transform = `translateX(-${offsetIdx * 25}%)`;
-
-    // 日付ラベル／ボタン活性
+    const offsetIdx = Math.min(
+      Math.max(idx - 1, 0),
+      days.length - 3
+    );
+    container.style.transform = `translateX(-${offsetIdx * 33.333}%)`;
+    // ラベル更新
     label.textContent = formatDateLabel(days[idx].dataset.date);
-    prevBtn.disabled  = idx === 0;
-    nextBtn.disabled  = idx === days.length - 1;
+    // ボタン活性
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === days.length - 1;
   }
 
   prevBtn.addEventListener('click', () => {
@@ -55,6 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (idx < days.length - 1) { idx++; update(); }
   });
 
-  // 初期レンダー
+  // 初期表示
   update();
 });
