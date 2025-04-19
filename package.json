@@ -1,0 +1,10 @@
+{
+  "name": "stream-status",
+  "version": "1.0.0",
+  "scripts": {
+    "fetch": "node scripts/fetch_streams.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  }
+}
