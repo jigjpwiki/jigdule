@@ -1,5 +1,8 @@
 name: Update Stream Status
 
+permissions:
+  contents: write
+  
 on:
   # 15分ごとのスケジュール実行
   schedule:
