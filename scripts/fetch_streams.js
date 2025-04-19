@@ -186,12 +186,3 @@ function generateHTML(events, streamers) {
     await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
   }
 })();
-
-    // HTML 出力
-    const html = generateHTML(events, list);
-    await fs.writeFile('docs/index.html', html, 'utf8');
-  } catch(err) {
-    console.error(err);
-    await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
-  }
-})();
