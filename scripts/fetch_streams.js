@@ -7,13 +7,17 @@ const YT_API_KEY           = process.env.YT_API_KEY;
 const TWITCH_CLIENT_ID     = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
-/** UTC時刻 → HH:mm:ss */
+//――――――――――――――――――――――――――
+// ヘルパー関数
+//――――――――――――――――――――――――――
+
+/** UTC時刻 → HH:mm:ss 形式 */
 function formatTime(utc) {
   const d = new Date(utc);
   return d.toLocaleTimeString('ja-JP', { hour12: false });
 }
 
-/** 日付ラベル用 YYYY/MM/DD (曜) */
+/** YYYY-MM-DD → YYYY/MM/DD (曜) */
 function formatDateLabel(isoDate) {
   const d = new Date(isoDate);
   const mm = String(d.getMonth()+1).padStart(2,'0');
@@ -32,22 +36,28 @@ function todayISO() {
 /** Twitch OAuth トークン取得 */
 async function getTwitchToken() {
   const res = await fetch(
-    `https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}` +
+    `https://id.twitch.tv/oauth2/token` +
+    `?client_id=${TWITCH_CLIENT_ID}` +
     `&client_secret=${TWITCH_CLIENT_SECRET}` +
     `&grant_type=client_credentials`,
     { method: 'POST' }
   );
-  return (await res.json()).access_token;
+  const j = await res.json();
+  return j.access_token;
 }
 
-/** Twitch ライブ取得 */
+//――――――――――――――――――――――――――
+// データ取得関数
+//――――――――――――――――――――――――――
+
 async function fetchTwitchLive(login, token) {
   const res = await fetch(
     `https://api.twitch.tv/helix/streams?user_login=${login}`,
     { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const { data } = await res.json();
-  if (!data || !data[0]) return null;
+  const json = await res.json();
+  const data = json.data || [];
+  if (!data[0]) return null;
   const s = data[0];
   return {
     platform:  'Twitch LIVE',
@@ -59,20 +69,19 @@ async function fetchTwitchLive(login, token) {
   };
 }
 
-/** Twitch 予定取得 */
 async function fetchTwitchSchedule(login, token) {
-  const ures = await fetch(
+  const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
     { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const ujson = await ures.json();
-  const id    = ujson.data?.[0]?.id;
+  const uidJson = await userRes.json();
+  const id      = uidJson.data?.[0]?.id;
   if (!id) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/schedule?broadcaster_id=${id}`,
     { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const segs  = (await res.json()).data?.segments || [];
+  const segs = (await res.json()).data?.segments || [];
   return segs
     .filter(s => s.title && s.title.trim()!=='')
     .map(s => ({
@@ -85,14 +94,13 @@ async function fetchTwitchSchedule(login, token) {
     }));
 }
 
-/** Twitch VOD取得 */
 async function fetchTwitchVods(login, token) {
-  const ures = await fetch(
+  const userRes = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
     { headers: { 'Client-ID': TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` } }
   );
-  const ujson = await ures.json();
-  const id    = ujson.data?.[0]?.id;
+  const uidJson = await userRes.json();
+  const id      = uidJson.data?.[0]?.id;
   if (!id) return [];
   const res = await fetch(
     `https://api.twitch.tv/helix/videos?user_id=${id}` +
@@ -110,13 +118,16 @@ async function fetchTwitchVods(login, token) {
   }));
 }
 
-/** YouTube 検索 */
 async function fetchYouTube(channelId, params) {
-  const url = `https://www.googleapis.com/youtube/v3/search?key=${YT_API_KEY}` +
-    `&channelId=${channelId}&part=snippet&type=video&order=date&maxResults=10&${params}`;
+  const url =
+    `https://www.googleapis.com/youtube/v3/search` +
+    `?key=${YT_API_KEY}` +
+    `&channelId=${channelId}` +
+    `&part=snippet&type=video` +
+    `&order=date&maxResults=10&${params}`;
   const res  = await fetch(url);
   const json = await res.json();
-  if (json.error) throw new Error(`YouTube API error: ${json.error.message}`);
+  if (json.error) throw new Error(json.error.message);
   return (json.items||[]).map(item => {
     const thumb     = item.snippet.thumbnails.medium.url;
     const isLive     = params.includes('eventType=live');
@@ -136,9 +147,12 @@ async function fetchYouTube(channelId, params) {
   });
 }
 
-/** HTML組立 */
+//――――――――――――――――――――――――――
+// HTML組み立て（ナビ＋日付セクション＋カード）
+//――――――――――――――――――――――――――
+
 function generateHTML(events, streamers) {
-  // 日付グループ化
+  // グループ化
   const groups = events.reduce((acc,e)=>{
     const d = e.time.split('T')[0];
     (acc[d]||(acc[d]=[])).push(e);
@@ -146,10 +160,10 @@ function generateHTML(events, streamers) {
   },{});
   const dates = Object.keys(groups).sort();
 
-  // セクション生成
-  const sections = dates.map(date=>{
-    const items = groups[date].map(e=>{
-      const info = streamers.find(s=>
+  // セクション
+  const sections = dates.map(date => {
+    const cards = groups[date].map(e => {
+      const info = streamers.find(s =>
         e.platform.startsWith('Twitch')
           ? e.url.includes(s.twitchUserLogin)
           : e.url.includes(s.youtubeChannelId)
@@ -159,16 +173,18 @@ function generateHTML(events, streamers) {
   <div class="time-badge">${formatTime(e.time)}</div>
   <div class="inner">
     <div class="left">
-      ${info.avatar?`<img class="avatar" src="assets/${info.avatar}" alt="${info.name}">`
-                   :`<div class="avatar placeholder"></div>`}
+      ${info.avatar
+        ? `<img class="avatar" src="assets/${info.avatar}" alt="${info.name}">`
+        : `<div class="avatar placeholder"></div>`}
     </div>
     <div class="center">
       <div class="name">${info.name||''}</div>
       <div class="title">${e.title}</div>
     </div>
     <div class="right">
-      ${e.thumbnail?`<img class="thumb" src="${e.thumbnail}" alt="">`
-                   :`<div class="thumb placeholder"></div>`}
+      ${e.thumbnail
+        ? `<img class="thumb" src="${e.thumbnail}" alt="">`
+        : `<div class="thumb placeholder"></div>`}
     </div>
   </div>
 </li>`;
@@ -176,13 +192,11 @@ function generateHTML(events, streamers) {
     return `
 <section class="day" data-date="${date}">
   <h2>${formatDateLabel(date)}</h2>
-  <ul class="cards">
-    ${items}
-  </ul>
+  <ul class="cards">${cards}</ul>
 </section>`;
   }).join('');
 
-  // フル HTML
+  // ページ全体を返却
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -191,64 +205,80 @@ function generateHTML(events, streamers) {
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  ${sections}
+  <header class="header">
+    <h1 class="title">jigdule</h1>
+    <div class="nav-buttons">
+      <button id="prevBtn" class="nav-btn">&lt;</button>
+      <span id="dateLabel" class="date-label"></span>
+      <button id="nextBtn" class="nav-btn">&gt;</button>
+    </div>
+  </header>
+  <main>
+    <div id="dayContainer" class="day-container">
+      ${sections}
+    </div>
+  </main>
+  <script src="assets/script.js"></script>
 </body>
 </html>`;
 }
 
-/** メイン */
-(async()=>{
+//――――――――――――――――――――――――――
+// メイン処理
+//――――――――――――――――――――――――――
+
+(async ()=>{
   try {
-    const token   = await getTwitchToken();
-    const list    = JSON.parse(await fs.readFile('data/streamers.json','utf8'));
-    let events    = [];
+    const token = await getTwitchToken();
+    const list  = JSON.parse(await fs.readFile('data/streamers.json','utf8'));
+    let events  = [];
 
     for(const s of list) {
       // Twitch LIVE
-      const tl = await fetchTwitchLive(s.twitchUserLogin,token);
-      if(tl) events.push({...tl,streamerName:s.name});
+      const tl = await fetchTwitchLive(s.twitchUserLogin, token);
+      if (tl) events.push(tl);
 
       // Twitch 予定
-      for(const r of await fetchTwitchSchedule(s.twitchUserLogin,token))
-        events.push({...r,streamerName:s.name});
+      (await fetchTwitchSchedule(s.twitchUserLogin, token))
+        .forEach(r=>events.push(r));
 
       // Twitch VOD
-      for(const v of await fetchTwitchVods(s.twitchUserLogin,token))
-        if(!(tl && Math.abs(new Date(v.time)-new Date(tl.time))<5*60*1000))
-          events.push({...v,streamerName:s.name});
+      (await fetchTwitchVods(s.twitchUserLogin, token))
+        .filter(v=>(!tl)||Math.abs(new Date(v.time)-new Date(tl.time))>=5*60*1000)
+        .forEach(r=>events.push(r));
 
       // YouTube LIVE
-      try{
-        const yl=await fetchYouTube(s.youtubeChannelId,'eventType=live');
-        yl.forEach(r=>events.push({...r,streamerName:s.name}));
-      }catch{}
+      try {
+        const yl = await fetchYouTube(s.youtubeChannelId,'eventType=live');
+        yl.forEach(r=>events.push(r));
+      } catch {}
 
       // YouTube 予定
-      try{
-        const yu=await fetchYouTube(s.youtubeChannelId,'eventType=upcoming');
-        yu.forEach(r=>events.push({...r,streamerName:s.name}));
-      }catch{}
+      try {
+        const yu = await fetchYouTube(s.youtubeChannelId,'eventType=upcoming');
+        yu.forEach(r=>events.push(r));
+      } catch {}
 
-      // YouTube 過去3日＋未来1週
-      try{
-        const yp=await fetchYouTube(s.youtubeChannelId,`publishedAfter=${todayISO()}`);
-        yp.forEach(r=>events.push({...r,streamerName:s.name}));
-      }catch{}
+      // YouTube 投稿
+      try {
+        const yp = await fetchYouTube(s.youtubeChannelId,`publishedAfter=${todayISO()}`);
+        yp.forEach(r=>events.push(r));
+      } catch {}
     }
 
-    // ソート＆フィルタ
+    // ソート＆フィルタ（過去3日〜未来1週）
     events.sort((a,b)=>new Date(a.time)-new Date(b.time));
-    const now=Date.now();
-    const past=now-3*24*60*60*1000, fut=now+7*24*60*60*1000;
-    events=events.filter(e=>{
+    const now=Date.now(), past=now-3*24*60*60*1000, fut=now+7*24*60*60*1000;
+    events = events.filter(e=>{
       const t=new Date(e.time).getTime();
       return t>=past && t<=fut;
     });
 
-    const html=generateHTML(events,list);
-    await fs.writeFile('docs/index.html',html,'utf8');
-  } catch(err) {
+    // 書き出し
+    const html = generateHTML(events, list);
+    await fs.writeFile('docs/index.html', html, 'utf8');
+  } catch (err) {
     console.error(err);
-    await fs.writeFile('docs/index.html',`<pre>${err.message}</pre>`,'utf8');
+    await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
   }
 })();
