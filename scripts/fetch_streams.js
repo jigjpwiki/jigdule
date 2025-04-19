@@ -3,14 +3,14 @@
 const fs = require('fs').promises;
 const fetch = require('node-fetch');
 
-const YT_API_KEY = process.env.YT_API_KEY;
-const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
+const YT_API_KEY            = process.env.YT_API_KEY;
+const TWITCH_CLIENT_ID      = process.env.TWITCH_CLIENT_ID;
+const TWITCH_CLIENT_SECRET  = process.env.TWITCH_CLIENT_SECRET;
 
 async function getTwitchToken() {
   const res = await fetch(
-    `https://id.twitch.tv/oauth2/token` +
-    `?client_id=${TWITCH_CLIENT_ID}` +
+    `https://id.twitch.tv/oauth2/token?` +
+    `client_id=${TWITCH_CLIENT_ID}` +
     `&client_secret=${TWITCH_CLIENT_SECRET}` +
     `&grant_type=client_credentials`,
     { method: 'POST' }
@@ -20,52 +20,60 @@ async function getTwitchToken() {
 }
 
 async function fetchTwitchLive(login, token) {
-  const res = await fetch(`https://api.twitch.tv/helix/streams?user_login=${login}`, {
-    headers: {
-      'Client-ID': TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
+  const res = await fetch(
+    `https://api.twitch.tv/helix/streams?user_login=${login}`,
+    {
+      headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
     }
-  });
+  );
   const { data } = await res.json();
   if (!data || data.length === 0) return null;
   const s = data[0];
   return {
-    title: s.title,
+    title:     s.title,
     startTime: s.started_at,
-    url: `https://twitch.tv/${login}`
+    url:       `https://twitch.tv/${login}`
   };
 }
 
 async function fetchTwitchSchedule(login, token) {
-  // ユーザーID取得
-  const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${login}`, {
-    headers: {
-      'Client-ID': TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
+  // ユーザーIDを取得
+  const userRes = await fetch(
+    `https://api.twitch.tv/helix/users?login=${login}`,
+    {
+      headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
     }
-  });
+  );
   const userJson = await userRes.json();
   const userId = userJson.data?.[0]?.id;
   if (!userId) return [];
   // スケジュール取得
-  const res = await fetch(`https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`, {
-    headers: {
-      'Client-ID': TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`
+  const res = await fetch(
+    `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}`,
+    {
+      headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${token}`
+      }
     }
-  });
+  );
   const json = await res.json();
-  const segs = json.data?.segments || [];
-  return segs.map(s => ({
-    title: s.title,
+  return (json.data?.segments || []).map(s => ({
+    title:     s.title,
     startTime: s.start_time
   }));
 }
 
 async function fetchYouTube(channelId, eventType, maxResults = 5) {
   const url =
-    `https://www.googleapis.com/youtube/v3/search` +
-    `?key=${YT_API_KEY}` +
+    `https://www.googleapis.com/youtube/v3/search?` +
+    `key=${YT_API_KEY}` +
     `&channelId=${channelId}` +
     `&part=snippet&type=video` +
     `&eventType=${eventType}` +
@@ -74,17 +82,17 @@ async function fetchYouTube(channelId, eventType, maxResults = 5) {
   const json = await res.json();
   return (json.items || []).map(item => ({
     title: item.snippet.title,
-    time: item.snippet.publishedAt,
-    url: `https://youtu.be/${item.id.videoId}`
+    time:  item.snippet.publishedAt,
+    url:   `https://youtu.be/${item.id.videoId}`
   }));
 }
 
 function generateHTML(streamers) {
-  const listItems = streamers.map(s => {
+  const items = streamers.map(s => {
     const ytLive = s.youtube.live[0];
-    const ytUp = s.youtube.upcoming;
+    const ytUp   = s.youtube.upcoming;
     const twLive = s.twitch.live;
-    const twSch = s.twitch.schedule;
+    const twSch  = s.twitch.schedule;
     return `
 <li class="streamer">
   <h2>${s.name}</h2>
@@ -109,7 +117,9 @@ function generateHTML(streamers) {
     ${twSch.length
       ? '<ul>' +
         twSch.map(u =>
-          `<li>予定: <a href="${u.url || `https://twitch.tv/${s.twitchUserLogin}`}" target="_blank">${u.title}</a> (${u.startTime})</li>`
+          `<li>予定: <a href="${
+             u.url || `https://twitch.tv/${s.twitchUserLogin}`
+           }" target="_blank">${u.title}</a> (${u.startTime})</li>`
         ).join('') +
         '</ul>'
       : ''}
@@ -126,9 +136,7 @@ function generateHTML(streamers) {
 </head>
 <body>
   <h1>ライブ & 近日配信予定</h1>
-  <ul class="streamers">
-    ${listItems}
-  </ul>
+  <ul class="streamers">${items}</ul>
 </body>
 </html>`;
 }
@@ -136,18 +144,18 @@ function generateHTML(streamers) {
 (async () => {
   try {
     const token = await getTwitchToken();
-    const listJson = await fs.readFile('data/streamers.json', 'utf8');
-    const list = JSON.parse(listJson);
+    const listTxt = await fs.readFile('data/streamers.json', 'utf8');
+    const list    = JSON.parse(listTxt);
     const results = [];
     for (const s of list) {
       const ytLive = await fetchYouTube(s.youtubeChannelId, 'live', 1);
-      const ytUp = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
+      const ytUp   = await fetchYouTube(s.youtubeChannelId, 'upcoming', 5);
       const twLive = await fetchTwitchLive(s.twitchUserLogin, token);
-      const twSch = await fetchTwitchSchedule(s.twitchUserLogin, token);
+      const twSch  = await fetchTwitchSchedule(s.twitchUserLogin, token);
       results.push({
-        name: s.name,
+        name:    s.name,
         youtube: { live: ytLive, upcoming: ytUp },
-        twitch: { live: twLive, schedule: twSch }
+        twitch:  { live: twLive, schedule: twSch }
       });
     }
     const html = generateHTML(results);
