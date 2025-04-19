@@ -30,13 +30,6 @@ hr {
 }
 
 /* カード */
-.card {
-  background: #fff;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
 .card:hover {
   border-color: #007aff;
 }
@@ -65,4 +58,42 @@ hr {
 /* ライブ中は赤枠 */
 .card.live {
   border-color: #e00 !important;
+}
+/* シンプルカードレイアウト */
+.container {
+  max-width: 960px;
+  margin: auto;
+  padding: 1rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+  gap: 1rem;
+}
+.card {
+  display: block;
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+.card .time {
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  background: #f0f0f0;
+}
+.card .name {
+  padding: 0 0.5rem;
+  font-weight: bold;
+}
+.card .thumb {
+  width: 100%;
+  display: block;
+}
+.card .title {
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.2;
 }
