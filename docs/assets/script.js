@@ -1,41 +1,57 @@
+// docs/assets/script.js
+
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('dayContainer');
   const days      = Array.from(container.querySelectorAll('.day'));
-  const label     = document.getElementById('dateLabel');
   const prevBtn   = document.getElementById('prevBtn');
   const nextBtn   = document.getElementById('nextBtn');
+  const label     = document.getElementById('dateLabel');
 
-  // 今日の日付文字列（YYYY-MM-DD）
-  const today = new Date().toISOString().split('T')[0];
-
-  // 今日に該当するセクションのインデックスを探す
-  let idx = days.findIndex(day => day.dataset.date === today);
-  if (idx < 0) idx = 0; // 見つからなければ先頭
-
-  // 日付ラベル更新
-  function updateLabel() {
-    const date = days[idx].dataset.date;          // "YYYY-MM-DD"
-    const d    = new Date(date);
-    const w    = ['日','月','火','水','木','金','土'][d.getDay()];
-    label.textContent = `${date.replace(/-/g,'/')}(${w})`;
+  // YYYY-MM-DD → MM/DD (曜) 形式のラベルを作るヘルパー
+  function formatDateLabel(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(s => parseInt(s, 10));
+    const w = ['日','月','火','水','木','金','土'][
+      new Date(y, m - 1, d).getDay()
+    ];
+    return `${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${w})`;
   }
 
-  // 指定インデックスへスクロール
-  function scrollToIndex(i) {
-    if (i < 0 || i >= days.length) return;
-    idx = i;
-    const width = container.clientWidth;
-    container.scrollTo({ left: width * idx, behavior: 'smooth' });
-    updateLabel();
+  // container を横スワイプの flex コンテナに
+  container.style.display    = 'flex';
+  container.style.transition = 'transform 0.3s ease';
+  container.style.overflow   = 'hidden';
+  days.forEach(day => {
+    day.style.flex = '0 0 100%';
+  });
+
+  // 今日の日付に対応するセクションを探し、なければ 0
+  const today = new Date().toISOString().slice(0, 10);
+  let idx = days.findIndex(sec => sec.dataset.date === today);
+  if (idx < 0) idx = 0;
+
+  // 表示更新：スライド位置・日付ラベル・ボタン活性
+  function update() {
+    container.style.transform = `translateX(-${idx * 100}%)`;
+    const dateStr = days[idx].dataset.date;
+    label.textContent = formatDateLabel(dateStr);
+    prevBtn.disabled = (idx === 0);
+    nextBtn.disabled = (idx === days.length - 1);
   }
 
-  prevBtn.addEventListener('click', () => scrollToIndex(idx - 1));
-  nextBtn.addEventListener('click', () => scrollToIndex(idx + 1));
+  prevBtn.addEventListener('click', () => {
+    if (idx > 0) {
+      idx--;
+      update();
+    }
+  });
 
-  // 初期表示は「今日」のインデックスへ
-  if (days.length > 0) {
-    // 瞬間移動（smooth を発火させないため）
-    container.scrollLeft = container.clientWidth * idx;
-    updateLabel();
-  }
+  nextBtn.addEventListener('click', () => {
+    if (idx < days.length - 1) {
+      idx++;
+      update();
+    }
+  });
+
+  // 初回レンダー
+  update();
 });
