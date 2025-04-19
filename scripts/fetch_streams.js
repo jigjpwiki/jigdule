@@ -207,21 +207,27 @@ function generateErrorHTML(err) {
     const events = [];
 
     for (const s of list) {
-      // --- Twitch は従来どおり ---
-      const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
-      if (tLive) events.push(tLive);
+      // Twitch LIVE
+const tLive = await fetchTwitchLive(s.twitchUserLogin, token);
+if (tLive) events.push(tLive);
 
-      (await fetchTwitchSchedule(s.twitchUserLogin, token))
-        .forEach(e => events.push(e));
+// Twitch 予定
+for (const e of await fetchTwitchSchedule(s.twitchUserLogin, token)) {
+  events.push(e);
+}
 
-      (await fetchTwitchVods(s.twitchUserLogin, token))
-        .filter(v =>
-          !(tLive &&
-            v.title === tLive.title &&
-            v.time.split('T')[0] === tLive.time.split('T')[0]
-          )
-        )
-        .forEach(v => events.push(v));
+// Twitch 過去配信（開始時刻5分以内は除外）
+for (const v of await fetchTwitchVods(s.twitchUserLogin, token)) {
+  if (
+    !(tLive &&
+      Math.abs(new Date(v.time) - new Date(tLive.time)) < 5 * 60 * 1000
+    )
+  ) {
+    events.push(v);
+  }
+}
+
+// …YouTube 部分はそのまま…
 
       // --- YouTube 部分は個別 try/catch ---
       let ytLiveList = [];
