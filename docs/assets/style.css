@@ -98,3 +98,18 @@ hr {
   font-size: 0.9rem;
   line-height: 1.2;
 }
+/* カードヘッダーで左右配置 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+}
+/* カード本体の余白調整 */
+.card .thumb {
+  width: 100%;
+  display: block;
+}
+.card .title {
+  padding: 0.5rem;
+}
