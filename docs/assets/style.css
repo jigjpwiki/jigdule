@@ -168,3 +168,14 @@ body {
   color: #666;
   text-align: center;
 }
+/* 当日のセクションだけ「2列グリッド」 */
+.day.current .cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* 非 current は1列 */
+.day .cards {
+  display: grid;
+  grid-template-columns: 1fr;
+}
