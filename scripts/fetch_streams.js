@@ -77,7 +77,7 @@ async function fetchTwitchLive(login, token, name) {
 }
 
 /** Twitch VOD（過去配信）取得 */
-async function fetchTwitchVods(login, token, name) {
+async function fetchTwitchVods(login, token, name, liveTime) {
   const ures = await fetch(
     `https://api.twitch.tv/helix/users?login=${login}`,
     { headers:{
@@ -89,7 +89,7 @@ async function fetchTwitchVods(login, token, name) {
   const uid = (await ures.json()).data?.[0]?.id;
   if (!uid) return [];
   const vres = await fetch(
-    `https://api.twitch.tv/helix/videos?user_id=${uid}&first=10&broadcast_type=archive`,
+    `https://api.twitch.tv/helix/videos?user_id=${uid}&first=20&broadcast_type=archive`,
     { headers:{
         'Client-ID': TWITCH_CLIENT_ID,
         Authorization: `Bearer ${token}`
@@ -97,36 +97,36 @@ async function fetchTwitchVods(login, token, name) {
     }
   );
   const vods = (await vres.json()).data || [];
-  return vods.map(v => {
-    let thumb = v.thumbnail_url
-      .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
-      .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
-      .replace(/%/g, '')
-      .replace(/\d+x\d+\.jpg/, '320x180.jpg');
-    return {
-      streamerName: name,
-      platform:     'Twitch',
-      title:        v.title,
-      url:          v.url,
-      time:         v.created_at,
-      thumbnail:    thumb,
-      status:       'past'
-    };
-  });
+
+  return vods
+    // digest/highlight は type='highlight' など別になるので archive のみかつライブ開始時刻と同じものを除外
+    .filter(v => v.type === 'archive' && v.created_at !== liveTime)
+    .map(v => {
+      let thumb = v.thumbnail_url
+        .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
+        .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
+        .replace(/%/g, '')
+        .replace(/\d+x\d+\.jpg/, '320x180.jpg');
+      return {
+        streamerName: name,
+        platform:     'Twitch',
+        title:        v.title,
+        url:          v.url,
+        time:         v.created_at,
+        thumbnail:    thumb,
+        status:       'past'
+      };
+    });
 }
 
-/**
- * YouTube 検索＋詳細取得
- * - eventType=live  → ライブ中
- * - eventType=upcoming → 予定（scheduledStartTime）
- */
+/** YouTube 動画検索＋詳細取得 */
 async function fetchYouTube(channelId, params, name) {
-  // 1) 検索 API で候補取得
+  // 検索 API で候補取得
   const searchUrl = `https://www.googleapis.com/youtube/v3/search` +
     `?key=${YT_API_KEY}` +
     `&channelId=${channelId}` +
     `&part=snippet&type=video&order=date&maxResults=10&${params}`;
-  const searchRes = await fetch(searchUrl);
+  const searchRes  = await fetch(searchUrl);
   const searchJson = await searchRes.json();
   if (searchJson.error) throw new Error(searchJson.error.message);
 
@@ -145,18 +145,18 @@ async function fetchYouTube(channelId, params, name) {
                      : 'past'
   }));
 
-  // 2) 予定のものについては scheduledStartTime を取得して time を上書き
+  // 予定 (upcoming) の場合は scheduledStartTime に上書き
   if (params.includes('eventType=upcoming') && results.length > 0) {
     const ids = results.map(r => r.url.split('/').pop()).join(',');
     const detailUrl = `https://www.googleapis.com/youtube/v3/videos` +
       `?key=${YT_API_KEY}` +
       `&id=${ids}` +
       `&part=liveStreamingDetails`;
-    const detailRes = await fetch(detailUrl);
+    const detailRes  = await fetch(detailUrl);
     const detailJson = await detailRes.json();
     const scheduleMap = {};
     (detailJson.items || []).forEach(v => {
-      if (v.liveStreamingDetails && v.liveStreamingDetails.scheduledStartTime) {
+      if (v.liveStreamingDetails?.scheduledStartTime) {
         scheduleMap[v.id] = v.liveStreamingDetails.scheduledStartTime;
       }
     });
@@ -172,15 +172,13 @@ async function fetchYouTube(channelId, params, name) {
 
 /** HTML 組み立て */
 function generateHTML(events, streamers) {
-  // JSTキーでグループ化
   const groups = events.reduce((acc, e) => {
-    const d = getJstDateKey(e.time);
-    (acc[d] || (acc[d] = [])).push(e);
+    const key = getJstDateKey(e.time);
+    (acc[key] || (acc[key] = [])).push(e);
     return acc;
   }, {});
   const dates = Object.keys(groups).sort();
 
-  // 各日セクション
   const sections = dates.map(date => `
 <h2>${formatDateLabel(date)}</h2>
 <hr>
@@ -222,7 +220,7 @@ function generateHTML(events, streamers) {
 </html>`;
 }
 
-//――――メイン処理――――
+//―――― メイン処理 ――――
 (async () => {
   try {
     const token = await getTwitchToken();
@@ -233,14 +231,22 @@ function generateHTML(events, streamers) {
       // Twitch ライブ
       const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
-      // Twitch VOD
-      const vods = await fetchTwitchVods(s.twitchUserLogin, token, s.name);
+
+      // Twitch VOD (digest/highlight を除外し、ライブと同時間のものは除去)
+      const vods = await fetchTwitchVods(
+        s.twitchUserLogin,
+        token,
+        s.name,
+        tl?.time
+      );
       events.push(...vods);
+
       // YouTube ライブ中
       try {
         const yLive = await fetchYouTube(s.youtubeChannelId, 'eventType=live', s.name);
         events.push(...yLive);
       } catch {}
+
       // YouTube 予定
       try {
         const yUp = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming', s.name);
@@ -248,11 +254,11 @@ function generateHTML(events, streamers) {
       } catch {}
     }
 
-    // 昇順ソート
-    events.sort((a,b) => new Date(a.time) - new Date(b.time));
+    // 時系列ソート（昇順）
+    events.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // フィルタ：ライブ中 or 予定 or 過去配信（昨日＋今日）
-    const nowJst   = new Date(Date.now() + 9*3600*1000);
+    // フィルタ：ライブ中 or 予定 or 昨日＋今日のVOD
+    const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
     nowJst.setUTCHours(0,0,0,0);
     const todayKey = nowJst.toISOString().slice(0,10);
     const yest     = new Date(nowJst);
