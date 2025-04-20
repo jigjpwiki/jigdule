@@ -36,6 +36,14 @@ function getJstDateKey(utc) {
   return `${Y}-${M}-${D}`;
 }
 
+/** ２つの時刻を「分」単位で同じか比較 */
+function sameMinute(a, b) {
+  if (!a || !b) return false;
+  const ta = Math.floor(new Date(a).getTime() / 60000);
+  const tb = Math.floor(new Date(b).getTime() / 60000);
+  return ta === tb;
+}
+
 /** Twitch OAuthトークン取得 */
 async function getTwitchToken() {
   const res = await fetch(
@@ -60,6 +68,7 @@ async function fetchTwitchLive(login, token, name) {
   );
   const { data = [] } = await res.json();
   if (!data[0]) return null;
+
   const s = data[0];
   let thumb = s.thumbnail_url
     .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
@@ -88,6 +97,7 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   );
   const uid = (await ures.json()).data?.[0]?.id;
   if (!uid) return [];
+
   const vres = await fetch(
     `https://api.twitch.tv/helix/videos?user_id=${uid}&first=20&broadcast_type=archive`,
     { headers:{
@@ -99,8 +109,8 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   const vods = (await vres.json()).data || [];
 
   return vods
-    // digest/highlight は type='highlight' など別になるので archive のみかつライブ開始時刻と同じものを除外
-    .filter(v => v.type === 'archive' && v.created_at !== liveTime)
+    // archive のみ、かつライブ開始分（分単位）と同じものを除外
+    .filter(v => v.type === 'archive' && !sameMinute(v.created_at, liveTime))
     .map(v => {
       let thumb = v.thumbnail_url
         .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
@@ -130,8 +140,7 @@ async function fetchYouTube(channelId, params, name) {
   const searchJson = await searchRes.json();
   if (searchJson.error) throw new Error(searchJson.error.message);
 
-  const items = searchJson.items || [];
-  let results = items.map(item => ({
+  let results = (searchJson.items || []).map(item => ({
     streamerName: name,
     platform:     'YouTube',
     title:        item.snippet.title,
@@ -145,8 +154,8 @@ async function fetchYouTube(channelId, params, name) {
                      : 'past'
   }));
 
-  // 予定 (upcoming) の場合は scheduledStartTime に上書き
-  if (params.includes('eventType=upcoming') && results.length > 0) {
+  // 予定 (upcoming) は scheduledStartTime で上書き
+  if (params.includes('eventType=upcoming') && results.length) {
     const ids = results.map(r => r.url.split('/').pop()).join(',');
     const detailUrl = `https://www.googleapis.com/youtube/v3/videos` +
       `?key=${YT_API_KEY}` +
@@ -156,9 +165,9 @@ async function fetchYouTube(channelId, params, name) {
     const detailJson = await detailRes.json();
     const scheduleMap = {};
     (detailJson.items || []).forEach(v => {
-      if (v.liveStreamingDetails?.scheduledStartTime) {
-        scheduleMap[v.id] = v.liveStreamingDetails.scheduledStartTime;
-      }
+      const id = v.id;
+      const sdt = v.liveStreamingDetails?.scheduledStartTime;
+      if (sdt) scheduleMap[id] = sdt;
     });
     results = results.map(r => {
       const vid = r.url.split('/').pop();
@@ -191,8 +200,7 @@ function generateHTML(events, streamers) {
   </div>
   <img class="thumb" src="${e.thumbnail}" alt="">
   <div class="title">${e.title}</div>
-</a>
-`).join('')}
+</a>`).join('')}
 </div>`).join('\n');
 
   return `<!DOCTYPE html>
@@ -232,7 +240,7 @@ function generateHTML(events, streamers) {
       const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
 
-      // Twitch VOD (digest/highlight を除外し、ライブと同時間のものは除去)
+      // Twitch VOD (同一分のものを除外)
       const vods = await fetchTwitchVods(
         s.twitchUserLogin,
         token,
@@ -254,7 +262,7 @@ function generateHTML(events, streamers) {
       } catch {}
     }
 
-    // 時系列ソート（昇順）
+    // 昇順ソート
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
 
     // フィルタ：ライブ中 or 予定 or 昨日＋今日のVOD
@@ -271,7 +279,6 @@ function generateHTML(events, streamers) {
       [todayKey, yestKey].includes(getJstDateKey(e.time))
     );
 
-    // HTML生成＆書き出し
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
   } catch (err) {
