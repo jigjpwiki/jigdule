@@ -26,10 +26,10 @@ function formatDateLabel(iso) {
   return `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${w})`;
 }
 
-/** UTC → JST 日付キー「YYYY-MM-DD」 */
+/** UTC→JST日付キー「YYYY-MM-DD」 */
 function getJstDateKey(utc) {
   const d   = new Date(utc);
-  const jst = new Date(d.getTime() + 9*60*60*1000);
+  const jst = new Date(d.getTime() + 9 * 3600 * 1000);
   const Y   = jst.getUTCFullYear();
   const M   = String(jst.getUTCMonth() + 1).padStart(2,'0');
   const D   = String(jst.getUTCDate()).padStart(2,'0');
@@ -61,9 +61,8 @@ async function fetchTwitchLive(login, token, name) {
   const { data = [] } = await res.json();
   if (!data[0]) return null;
   const s = data[0];
-  // {width}/{height} と %7Bwidth%7D/%7Bheight%7D を置換
   let thumb = s.thumbnail_url
-    .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
+    .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
     .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
     .replace(/%/g, '');
   return {
@@ -99,9 +98,8 @@ async function fetchTwitchVods(login, token, name) {
   );
   const vods = (await vres.json()).data || [];
   return vods.map(v => {
-    // プレースホルダと % を置換
     let thumb = v.thumbnail_url
-      .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
+      .replace(/\{width\}/g,  '320').replace(/\{height\}/g, '180')
       .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
       .replace(/%/g, '')
       .replace(/\d+x\d+\.jpg/, '320x180.jpg');
@@ -117,16 +115,23 @@ async function fetchTwitchVods(login, token, name) {
   });
 }
 
-/** YouTube 動画検索ヘルパー */
+/**
+ * YouTube 検索＋詳細取得
+ * - eventType=live  → ライブ中
+ * - eventType=upcoming → 予定（scheduledStartTime）
+ */
 async function fetchYouTube(channelId, params, name) {
-  const url = `https://www.googleapis.com/youtube/v3/search` +
+  // 1) 検索 API で候補取得
+  const searchUrl = `https://www.googleapis.com/youtube/v3/search` +
     `?key=${YT_API_KEY}` +
     `&channelId=${channelId}` +
     `&part=snippet&type=video&order=date&maxResults=10&${params}`;
-  const res  = await fetch(url);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message);
-  return (json.items || []).map(item => ({
+  const searchRes = await fetch(searchUrl);
+  const searchJson = await searchRes.json();
+  if (searchJson.error) throw new Error(searchJson.error.message);
+
+  const items = searchJson.items || [];
+  let results = items.map(item => ({
     streamerName: name,
     platform:     'YouTube',
     title:        item.snippet.title,
@@ -139,17 +144,43 @@ async function fetchYouTube(channelId, params, name) {
                      ? 'upcoming'
                      : 'past'
   }));
+
+  // 2) 予定のものについては scheduledStartTime を取得して time を上書き
+  if (params.includes('eventType=upcoming') && results.length > 0) {
+    const ids = results.map(r => r.url.split('/').pop()).join(',');
+    const detailUrl = `https://www.googleapis.com/youtube/v3/videos` +
+      `?key=${YT_API_KEY}` +
+      `&id=${ids}` +
+      `&part=liveStreamingDetails`;
+    const detailRes = await fetch(detailUrl);
+    const detailJson = await detailRes.json();
+    const scheduleMap = {};
+    (detailJson.items || []).forEach(v => {
+      if (v.liveStreamingDetails && v.liveStreamingDetails.scheduledStartTime) {
+        scheduleMap[v.id] = v.liveStreamingDetails.scheduledStartTime;
+      }
+    });
+    results = results.map(r => {
+      const vid = r.url.split('/').pop();
+      if (scheduleMap[vid]) r.time = scheduleMap[vid];
+      return r;
+    });
+  }
+
+  return results;
 }
 
 /** HTML 組み立て */
 function generateHTML(events, streamers) {
+  // JSTキーでグループ化
   const groups = events.reduce((acc, e) => {
-    const key = getJstDateKey(e.time);
-    (acc[key] || (acc[key] = [])).push(e);
+    const d = getJstDateKey(e.time);
+    (acc[d] || (acc[d] = [])).push(e);
     return acc;
   }, {});
   const dates = Object.keys(groups).sort();
 
+  // 各日セクション
   const sections = dates.map(date => `
 <h2>${formatDateLabel(date)}</h2>
 <hr>
@@ -162,17 +193,16 @@ function generateHTML(events, streamers) {
   </div>
   <img class="thumb" src="${e.thumbnail}" alt="">
   <div class="title">${e.title}</div>
-</a>`).join('')}
+</a>
+`).join('')}
 </div>`).join('\n');
 
-return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <!-- ブラウザタブのタイトル -->
   <title>じぐじゅーる | jig.jp(Vtuber事業)非公式Wiki</title>
-  <!-- ファビコン -->
-  <link rel="icon" href="assets/jigdule_favicon.ico" type="image/x-icon">
+  <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -187,15 +217,12 @@ return `<!DOCTYPE html>
       <a href="https://wikiwiki.jp/jigjp/" target="_blank">jig.jpWikiトップ</a> |
       管理者X・お問い合わせ窓口: <a href="https://x.com/Jigjpwiki" target="_blank">@Jigjpwiki</a>
     </p>
-    <p>
-      配信中の枠が2つ現れてしまう不具合について調査中です
-    </p>
   </footer>
 </body>
 </html>`;
 }
 
-// メイン IIFE
+//――――メイン処理――――
 (async () => {
   try {
     const token = await getTwitchToken();
@@ -211,33 +238,34 @@ return `<!DOCTYPE html>
       events.push(...vods);
       // YouTube ライブ中
       try {
-        const ytLive = await fetchYouTube(s.youtubeChannelId, 'eventType=live', s.name);
-        events.push(...ytLive);
+        const yLive = await fetchYouTube(s.youtubeChannelId, 'eventType=live', s.name);
+        events.push(...yLive);
       } catch {}
       // YouTube 予定
       try {
-        const ytUp = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming', s.name);
-        events.push(...ytUp);
+        const yUp = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming', s.name);
+        events.push(...yUp);
       } catch {}
     }
 
-    // 時系列ソート（昇順）
-    events.sort((a, b) => new Date(a.time) - new Date(b.time));
+    // 昇順ソート
+    events.sort((a,b) => new Date(a.time) - new Date(b.time));
 
-    // フィルタ：ライブ or 予定 or 昨日のVODのみ
-    const nowJst = new Date(Date.now() + 9*3600*1000);
+    // フィルタ：ライブ中 or 予定 or 過去配信（昨日＋今日）
+    const nowJst   = new Date(Date.now() + 9*3600*1000);
     nowJst.setUTCHours(0,0,0,0);
-    const yest = new Date(nowJst);
+    const todayKey = nowJst.toISOString().slice(0,10);
+    const yest     = new Date(nowJst);
     yest.setUTCDate(yest.getUTCDate() - 1);
-    const yestKey = `${yest.getUTCFullYear()}-${String(yest.getUTCMonth()+1).padStart(2,'0')}-${String(yest.getUTCDate()).padStart(2,'0')}`;
+    const yestKey  = yest.toISOString().slice(0,10);
 
     events = events.filter(e =>
       e.status === 'live' ||
       e.status === 'upcoming' ||
-      getJstDateKey(e.time) === yestKey
+      [todayKey, yestKey].includes(getJstDateKey(e.time))
     );
 
-    // HTML 生成＆書き出し
+    // HTML生成＆書き出し
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
   } catch (err) {
