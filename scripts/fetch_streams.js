@@ -54,12 +54,12 @@ function getJstDateKey(utc) {
   return `${Y}-${M}-${D}`;
 }
 
-/** ２つの時刻を「分」単位で同じか比較 */
-function sameMinute(a, b) {
+/** ２つの時刻が±1分以内かを比較 */
+function withinOneMinute(a, b) {
   if (!a || !b) return false;
-  const ta = Math.floor(new Date(a).getTime() / 60000);
-  const tb = Math.floor(new Date(b).getTime() / 60000);
-  return ta === tb;
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  return Math.abs(ta - tb) <= 60 * 1000;  // 60秒以内
 }
 
 /** Twitch OAuthトークン取得 */
@@ -127,7 +127,8 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   );
   const vods = (await vres.json()).data || [];
   return vods
-    .filter(v => v.type === 'archive' && !sameMinute(v.created_at, liveTime))
+    // archive のみ、かつライブ開始時刻と±1分以内のものを除外
+    .filter(v => v.type === 'archive' && !withinOneMinute(v.created_at, liveTime))
     .map(v => {
       const thumb = v.thumbnail_url
         .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
@@ -259,8 +260,13 @@ function generateHTML(events, streamers) {
       const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
 
-      // Twitch VOD
-      const vods = await fetchTwitchVods(s.twitchUserLogin, token, s.name, tl?.time);
+      // Twitch VOD（開始時刻が±1分以内のものは除外）
+      const vods = await fetchTwitchVods(
+        s.twitchUserLogin,
+        token,
+        s.name,
+        tl?.time
+      );
       events.push(...vods);
 
       // YouTube ライブ中（エラー時は無視）
