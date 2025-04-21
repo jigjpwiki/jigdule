@@ -97,7 +97,6 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   );
   const uid = (await ures.json()).data?.[0]?.id;
   if (!uid) return [];
-
   const vres = await fetch(
     `https://api.twitch.tv/helix/videos?user_id=${uid}&first=20&broadcast_type=archive`,
     { headers:{
@@ -109,7 +108,7 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   const vods = (await vres.json()).data || [];
 
   return vods
-    // archive のみ、かつライブ開始分（分単位）と同じものを除外
+    // archive のみ、同一分に始まったライブと重複しないよう除外
     .filter(v => v.type === 'archive' && !sameMinute(v.created_at, liveTime))
     .map(v => {
       let thumb = v.thumbnail_url
@@ -228,19 +227,28 @@ function generateHTML(events, streamers) {
 </html>`;
 }
 
-//―――― メイン処理 ――――
 (async () => {
   try {
     const token = await getTwitchToken();
     const list  = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
     let events  = [];
 
+    // 期間制限用：昨日キー／今日キー／１か月後日時
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + 9 * 3600 * 1000);
+    const todayKey = jstNow.toISOString().slice(0,10);
+    const yest = new Date(jstNow);
+    yest.setUTCDate(yest.getUTCDate() - 1);
+    const yestKey = yest.toISOString().slice(0,10);
+    const oneMonthLater = new Date(now);
+    oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
     for (const s of list) {
       // Twitch ライブ
       const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
 
-      // Twitch VOD (同一分のものを除外)
+      // Twitch VOD
       const vods = await fetchTwitchVods(
         s.twitchUserLogin,
         token,
@@ -262,22 +270,21 @@ function generateHTML(events, streamers) {
       } catch {}
     }
 
-    // 昇順ソート
+    // 時系列ソート
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-    // フィルタ：ライブ中 or 予定 or 昨日＋今日のVOD
-    const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
-    nowJst.setUTCHours(0,0,0,0);
-    const todayKey = nowJst.toISOString().slice(0,10);
-    const yest     = new Date(nowJst);
-    yest.setUTCDate(yest.getUTCDate() - 1);
-    const yestKey  = yest.toISOString().slice(0,10);
-
-    events = events.filter(e =>
-      e.status === 'live' ||
-      e.status === 'upcoming' ||
-      [todayKey, yestKey].includes(getJstDateKey(e.time))
-    );
+    // フィルタ：ライブ中 or 1か月以内の予定 or 昨日＋今日のVOD のみ
+    events = events.filter(e => {
+      if (e.status === 'live') return true;
+      if (e.status === 'upcoming') {
+        return new Date(e.time) <= oneMonthLater;
+      }
+      if (e.status === 'past') {
+        const key = getJstDateKey(e.time);
+        return key === todayKey || key === yestKey;
+      }
+      return false;
+    });
 
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
