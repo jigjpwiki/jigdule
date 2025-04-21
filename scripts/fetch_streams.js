@@ -10,7 +10,7 @@ const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 // キャッシュ用ファイル
 const CACHE_FILE = 'data/cache.json';
 
-/** キャッシュ読み込み */
+// キャッシュ読み込み
 async function loadCache() {
   try {
     const txt = await fs.readFile(CACHE_FILE, 'utf8');
@@ -20,7 +20,7 @@ async function loadCache() {
   }
 }
 
-/** キャッシュ保存 */
+// キャッシュ保存
 async function saveCache(cache) {
   await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf8');
 }
@@ -255,39 +255,44 @@ function generateHTML(events, streamers) {
     let events = [];
 
     for (const s of list) {
-      // Twitch ライブ & VOD
-      const tl   = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
+      // Twitch ライブ
+      const tl = await fetchTwitchLive(s.twitchUserLogin, token, s.name);
       if (tl) events.push(tl);
+
+      // Twitch VOD
       const vods = await fetchTwitchVods(s.twitchUserLogin, token, s.name, tl?.time);
       events.push(...vods);
 
-      // YouTube ライブ差分
-      const liveList = await fetchYouTube(s.youtubeChannelId, 'eventType=live', s.name);
-      liveList.forEach(e => cache.live[e.url] = e);
-      events.push(...liveList);
+      // YouTube ライブ中（エラー時は無視）
+      let ytLive = [];
+      try {
+        ytLive = await fetchYouTube(s.youtubeChannelId, 'eventType=live', s.name);
+      } catch (err) {
+        console.error(`YouTube live error for ${s.name}:`, err.message);
+      }
+      ytLive.forEach(e => cache.live[e.url] = e);
+      events.push(...ytLive);
 
-      // YouTube 予定差分
-      const pa     = cache.lastFetch ? `&publishedAfter=${cache.lastFetch}` : '';
-      const upList = await fetchYouTube(s.youtubeChannelId, `eventType=upcoming${pa}`, s.name);
-      upList.forEach(e => cache.upcoming[e.url] = e);
-      events.push(...upList);
-
-      // YouTube ライブ終了検知→VOD化（必要なら別処理）
-      // 省略可：YouTube では通常 VOD は search/past で対応しない
-
+      // YouTube 予定（エラー時は無視）
+      let ytUp = [];
+      try {
+        ytUp = await fetchYouTube(s.youtubeChannelId, 'eventType=upcoming', s.name);
+      } catch (err) {
+        console.error(`YouTube upcoming error for ${s.name}:`, err.message);
+      }
+      ytUp.forEach(e => cache.upcoming[e.url] = e);
+      events.push(...ytUp);
     }
 
     // キャッシュ更新
     cache.lastFetch = now.toISOString();
     await saveCache(cache);
 
-    // 並び替え＆フィルタ
+    // 時系列ソート＆フィルタ
     events.sort((a, b) => new Date(a.time) - new Date(b.time));
     events = events.filter(e => {
       if (e.status === 'live') return true;
-      if (e.status === 'upcoming') {
-        return new Date(e.time) <= oneMonthLater;
-      }
+      if (e.status === 'upcoming') return new Date(e.time) <= oneMonthLater;
       if (e.status === 'past') {
         const key = getJstDateKey(e.time);
         return key === todayKey || key === yestKey;
@@ -297,6 +302,7 @@ function generateHTML(events, streamers) {
 
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
+
   } catch (err) {
     console.error(err);
     await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
