@@ -4,7 +4,7 @@ permissions:
   contents: write
 
 on:
-  schedule:
+ # schedule:
     # ── 1日中 1 時間毎
   #  - cron: '0 * * * *'
     # ── 1日中 15 分毎
