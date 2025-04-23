@@ -20,7 +20,7 @@ async function loadCache() {
       live: {},
       upcoming: {},
       vod: {},
-      processed: [],    // 既に処理済みの URL リスト
+      processed: [],    // 処理済みの YouTube URL を保存
       lastFetch: null
     };
   }
@@ -95,8 +95,10 @@ async function fetchTwitchLive(login, token, name) {
   if (!data[0]) return null;
   const s = data[0];
   const thumb = s.thumbnail_url
-    .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
-    .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
+    .replace(/\{width\}/g, '320')
+    .replace(/\{height\}/g, '180')
+    .replace(/%7Bwidth%7D/g, '320')
+    .replace(/%7Bheight%7D/g, '180')
     .replace(/%/g, '');
   return {
     streamerName: name,
@@ -133,24 +135,23 @@ async function fetchTwitchVods(login, token, name, liveTime) {
   );
   const vods = (await vres.json()).data || [];
   return vods
-    .filter(v =>
-      v.type === 'archive' &&
-      !withinOneMinute(v.created_at, liveTime)
-    )
+    // archive のみ、かつライブ開始時刻と±1分以内のものを除外
+    .filter(v => v.type === 'archive' && !withinOneMinute(v.created_at, liveTime))
     .map(v => {
-      const url = v.url;
       const thumb = v.thumbnail_url
-        .replace(/\{width\}/g, '320').replace(/\{height\}/g, '180')
-        .replace(/%7Bwidth%7D/g, '320').replace(/%7Bheight%7D/g, '180')
+        .replace(/\{width\}/g, '320')
+        .replace(/\{height\}/g, '180')
+        .replace(/%7Bwidth%7D/g, '320')
+        .replace(/%7Bheight%7D/g, '180')
         .replace(/%/g, '')
         .replace(/\d+x\d+\.jpg/, '320x180.jpg');
       return {
         streamerName: name,
         platform:     'Twitch',
         title:        v.title,
-        url,
+        url:          v.url,
         time:         v.created_at,
-        thumbnail,
+        thumbnail:    thumb,
         status:       'past'
       };
     });
@@ -180,9 +181,8 @@ async function fetchYouTube(channelId, params, name, cache) {
                      : 'past'
   }));
 
-  // upcoming の時間上書きは「未処理のもののみ」実行
+  // upcoming は未処理のものだけ詳細取得
   if (params.includes('eventType=upcoming') && results.length) {
-    // 新規のみ
     const newItems = results.filter(r => !cache.processed.includes(r.url));
     if (newItems.length) {
       const ids = newItems.map(r => r.url.split('/').pop()).join(',');
@@ -217,6 +217,21 @@ function generateHTML(events, streamers) {
   }, {});
   const dates = Object.keys(groups).sort();
 
+  const sections = dates.map(date => `
+<h2>${formatDateLabel(date)}</h2>
+<hr>
+<div class="grid">
+  ${groups[date].map(e => `
+<a href="${e.url}" target="_blank" class="card ${e.status}">
+  <div class="card-header">
+    <span class="time">${formatTime(e.time)}</span>
+    <span class="name">${e.streamerName}</span>
+  </div>
+  <img class="thumb" src="${e.thumbnail}" alt="">
+  <div class="title">${e.title}</div>
+</a>`).join('')}
+</div>`).join('\n');
+
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -230,22 +245,7 @@ function generateHTML(events, streamers) {
     <img src="assets/jigdule_logo.png" alt="jigdule ロゴ" class="logo">
   </header>
   <div class="container">
-    ${dates.map(date => `
-      <h2>${formatDateLabel(date)}</h2>
-      <hr>
-      <div class="grid">
-        ${groups[date].map(e => `
-          <a href="${e.url}" target="_blank" class="card ${e.status}">
-            <div class="card-header">
-              <span class="time">${formatTime(e.time)}</span>
-              <span class="name">${e.streamerName}</span>
-            </div>
-            <img class="thumb" src="${e.thumbnail}" alt="">
-            <div class="title">${e.title}</div>
-          </a>
-        `).join('')}
-      </div>
-    `).join('')}
+    ${sections}
   </div>
   <footer class="footer">
     <p>
@@ -262,9 +262,8 @@ function generateHTML(events, streamers) {
     const cache = await loadCache();
     const token = await getTwitchToken();
     const list  = JSON.parse(await fs.readFile('data/streamers.json', 'utf8'));
-
     const now   = new Date();
-    const jstNow = new Date(now.getTime() + 9 * 3600 * 1000);
+    const jstNow  = new Date(now.getTime() + 9 * 3600 * 1000);
     const todayKey = jstNow.toISOString().slice(0,10);
     const yest     = new Date(jstNow);
     yest.setUTCDate(yest.getUTCDate() - 1);
@@ -314,12 +313,11 @@ function generateHTML(events, streamers) {
     cache.lastFetch = now.toISOString();
     await saveCache(cache);
 
-    // ソート＆フィルタ
-    events.sort((a,b) => new Date(a.time) - new Date(b.time));
+    // 時系列ソート＆フィルタ
+    events.sort((a, b) => new Date(a.time) - new Date(b.time));
     events = events.filter(e => {
       if (e.status === 'live') return true;
-      if (e.status === 'upcoming')
-        return new Date(e.time) <= oneMonthLater;
+      if (e.status === 'upcoming') return new Date(e.time) <= oneMonthLater;
       if (e.status === 'past') {
         const key = getJstDateKey(e.time);
         return key === todayKey || key === yestKey;
@@ -329,6 +327,7 @@ function generateHTML(events, streamers) {
 
     const html = generateHTML(events, list);
     await fs.writeFile('docs/index.html', html, 'utf8');
+
   } catch (err) {
     console.error(err);
     await fs.writeFile('docs/index.html', `<pre>${err.message}</pre>`, 'utf8');
