@@ -1,9 +1,0 @@
-# プロジェクトルートで
-cat << 'EOF' > data/cache.json
-{
-  "live": {},
-  "upcoming": {},
-  "vod": {},
-  "lastFetch": null
-}
-EOF
