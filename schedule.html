@@ -1,2 +1,143 @@
 <!-- スケジュールメインページ -->
 
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>配信スケジュール</title>
+  <link rel="stylesheet" href="/assets/css/style.css" />
+</head>
+<body>
+  <!-- ナビゲーション -->
+  <nav>
+    <ul class="nav-groups">
+      <li><a href="#" data-group="all" class="active">全体</a></li>
+      <li><a href="#" data-group="hololive">ホロライブ</a></li>
+      <li><a href="#" data-group="holostars">ホロスターズ</a></li>
+      <!-- 他グループ追加 -->
+    </ul>
+  </nav>
+
+  <!-- 言語 / タイムゾーン選択 -->
+  <div class="controls">
+    <label for="locale-select">言語:</label>
+    <select id="locale-select">
+      <option value="ja" selected>日本語</option>
+      <option value="en">English</option>
+    </select>
+
+    <label for="timezone-select">タイムゾーン:</label>
+    <select id="timezone-select">
+      <option value="Asia/Tokyo" selected>Asia/Tokyo</option>
+      <option value="UTC">UTC</option>
+      <!-- 他タイムゾーン追加 -->
+    </select>
+  </div>
+
+  <!-- タブ切替 -->
+  <div class="tabs">
+    <button data-status="live" class="active">配信中</button>
+    <button data-status="upcoming">配信予定</button>
+    <button data-status="archive">アーカイブ</button>
+    <button data-status="chat">フリーチャット</button>
+  </div>
+
+  <!-- スケジュール表示領域 -->
+  <main id="schedule-container">
+    <!-- JavaScript で動的に日付セクションを生成 -->
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p id="updated-at"></p>
+    <p><a href="/about">About</a> | <a href="/privacy">Privacy</a></p>
+  </footer>
+
+  <script>
+    const DATA_URL = '/data/liveVideos.json';
+    const container = document.getElementById('schedule-container');
+    const updatedAtElem = document.getElementById('updated-at');
+
+    // タブ・グループ・タイムゾーン切替用要素取得
+    const tabs = document.querySelectorAll('.tabs button');
+    const groupLinks = document.querySelectorAll('.nav-groups a');
+    const tzSelect = document.getElementById('timezone-select');
+
+    let state = {
+      status: 'live',
+      group: 'all',
+      tz: 'Asia/Tokyo'
+    };
+
+    async function fetchAndRender() {
+      const res = await fetch(DATA_URL);
+      const data = await res.json();
+      updatedAtElem.textContent = `最終更新: ${new Date().toLocaleString('ja-JP', { timeZone: state.tz })}`;
+      renderSchedule(data);
+    }
+
+    function renderSchedule(items) {
+      container.innerHTML = '';
+      // 日付ごとにグループ
+      const byDate = items.reduce((acc, item) => {
+        const date = new Date(item.snippet.publishedAt).toLocaleDateString('ja-JP', { timeZone: state.tz });
+        if (!acc[date]) acc[date] = [];
+        acc[date].push(item);
+        return acc;
+      }, {});
+
+      Object.keys(byDate).sort().forEach(date => {
+        const section = document.createElement('section');
+        section.className = 'schedule-day';
+        section.innerHTML = `<h2>${date}</h2><ul></ul>`;
+        const ul = section.querySelector('ul');
+
+        byDate[date].forEach(item => {
+          // ステータス・グループ・フィルタリング
+          if (item.status !== state.status) return;
+          if (state.group !== 'all' && item.group !== state.group) return;
+
+          const time = new Date(item.snippet.publishedAt).toLocaleTimeString('ja-JP', { timeZone: state.tz, hour: '2-digit', minute: '2-digit' });
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <span class="status">${item.statusLabel}</span>
+            <a href="${item.url}" target="_blank">
+              <img src="${item.snippet.thumbnails.medium.url}" alt="${item.snippet.title}" />
+              <div class="info">
+                <p class="title">${item.snippet.title}</p>
+                <p class="talent">${item.snippet.channelTitle}</p>
+                <time>${time}</time>
+              </div>
+            </a>`;
+          ul.appendChild(li);
+        });
+
+        container.appendChild(section);
+      });
+    }
+
+    // イベントリスナー設定
+    tabs.forEach(btn => btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.status = btn.dataset.status;
+      fetchAndRender();
+    }));
+    groupLinks.forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      groupLinks.forEach(l => l.classList.remove('active'));
+      a.classList.add('active');
+      state.group = a.dataset.group;
+      fetchAndRender();
+    }));
+    tzSelect.addEventListener('change', () => {
+      state.tz = tzSelect.value;
+      fetchAndRender();
+    });
+
+    // 初回表示
+    fetchAndRender();
+  </script>
+</body>
+</html>
